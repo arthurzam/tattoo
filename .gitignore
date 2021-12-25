@@ -1,0 +1,5 @@
+*.socket
+*.db
+*.pyc
+*.pyo
+.ropeproject
