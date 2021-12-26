@@ -1,16 +1,27 @@
+from typing import Dict
 import asyncio
 import os
-import typing
 
 from db import DB
 import messages
+import bugs_fetcher
 
 
 loop = asyncio.get_event_loop()
-workers: typing.Dict[messages.Worker, asyncio.StreamWriter] = {}
+workers: Dict[messages.Worker, asyncio.StreamWriter] = {}
 
 db = DB()
 
+async def do_scan():
+    for worker, bugs in bugs_fetcher.collect_bugs([], *workers.keys()):
+        if bugs := list(db.filter_not_tested(worker.canonical_arch(), bugs)):
+            workers[worker].write(messages.dump(messages.GlobalJob(bugs)))
+            await workers[worker].drain()
+
+async def auto_scan(interval: int):
+    while True:
+        await asyncio.sleep(interval)
+        await do_scan()
 
 async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     worker = messages.Worker(name='', arch='')
@@ -24,10 +35,9 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                         workers[data] = writer
                         print(worker.name, 'of type', worker.arch, 'connected')
                 elif isinstance(data, messages.GlobalJob):
-                    print(data.bugs)
-                    for writer in workers.values():
-                        writer.write(messages.dump(data))
-                        await writer.drain()
+                    for worker, bugs in bugs_fetcher.collect_bugs(data.bugs, *workers.keys()):
+                        workers[worker].write(messages.dump(messages.GlobalJob(bugs)))
+                        await workers[worker].drain()
                 elif isinstance(data, messages.BugJobDone):
                     db.report_job(worker, data)
                     if data.success:
@@ -36,7 +46,7 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                     writer.write(messages.dump(db.get_reportes(data.since)))
                     await writer.drain()
                 elif isinstance(data, messages.DoScan):
-                    pass # TODO: implement this
+                    asyncio.ensure_future(do_scan())
             else:
                 break
 
@@ -49,11 +59,13 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     
     workers.pop(worker, None)
 
+
 def main():
     if os.path.exists(messages.socket_filename):
         os.remove(messages.socket_filename)
     loop.run_until_complete(asyncio.start_unix_server(handler, path=messages.socket_filename))
     os.chmod(messages.socket_filename, 0o666)
+    # asyncio.ensure_future(auto_scan(3600))
     loop.run_forever()
 
 if __name__ == '__main__':

@@ -8,8 +8,11 @@ class Worker(NamedTuple):
     name: str
     arch: str
 
-    def canonical_arch(self):
+    def canonical_arch(self) -> str:
         return self.arch.removeprefix('~')
+
+    def is_rekeyword(self) -> bool:
+        return self.arch.startswith('~')
 
 
 class BugJob(NamedTuple):

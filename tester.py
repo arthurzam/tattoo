@@ -5,22 +5,8 @@ import asyncio
 import socket
 import os
 
-from nattka.bugzilla import *
-
+import bugs_fetcher
 import messages
-
-
-nattka_bugzilla = NattkaBugzilla(api_key=None)
-
-
-def is_ready(bug: BugInfo) -> bool:
-    if bug.resolved:
-        return False
-    if len(bug.depends) > 0:
-        results = nattka_bugzilla.find_bugs(bugs=bug.depends, unresolved=True)
-        if results.items():
-            return False
-    return True
 
 
 def send_irker(bugno: int, msg: str):
@@ -77,8 +63,8 @@ async def handle_bug_job(writer: asyncio.StreamWriter, bug_no: int) -> None:
 
 async def handler():
     reader, writer = await asyncio.open_unix_connection(path=messages.socket_filename)
-
-    writer.write(messages.dump(messages.Worker(name=options.name, arch=options.arch)))
+    worker = messages.Worker(name=options.name, arch=options.arch)
+    writer.write(messages.dump(worker))
     await writer.drain()
     try:
         while True:
@@ -86,35 +72,24 @@ async def handler():
                 data = messages.load(data)
                 if isinstance(data, messages.GlobalJob):
                     print(data.bugs)
-                    bugs = nattka_bugzilla.find_bugs(
-                        bugs=data.bugs,
-                        unresolved=True,
-                        sanity_check=[True],
-                        cc=[f'{options.arch.removeprefix("~")}@gentoo.org']
-                    )
-                    for bug_no, bug in bugs.items():
-                        if is_ready(bug) and (bug.category == BugCategory.KEYWORDREQ) == options.arch.startswith('~'):
+                    for _, bugs in bugs_fetcher.collect_bugs(data.bugs, worker):
+                        for bug_no in bugs:
                             asyncio.ensure_future(handle_bug_job(writer, bug_no))
             else:
                 break
     except EOFError:
-        pass
+        print('EOF')
     except ConnectionResetError:
-        pass
+        print('Closed')
 
 parser = ArgumentParser()
-parser.add_argument("-n", "--name", dest="name", action="store",
+parser.add_argument("-n", "--name", dest="name", action="store", required=True,
                     help="name for the tester, easy to identify")
-parser.add_argument("-a", "--arch", dest="arch", action="store",
+parser.add_argument("-a", "--arch", dest="arch", action="store", required=True,
                     help="Gentoo's arch name. Prepend with ~ for keywording")
 parser.add_argument("-j", "--jobs", dest="jobs", type=int, action="store", default=2,
                     help="Amount of simultaneous testing jobs")
 options = parser.parse_args()
-
-if not options.name:
-    parser.error('name not given')
-if not options.arch:
-    parser.error('arch not given')
 
 sema = asyncio.BoundedSemaphore(options.jobs)
 
