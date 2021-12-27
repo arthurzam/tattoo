@@ -4,3 +4,4 @@
 *.pyo
 .ropeproject
 controller.datetime.txt
+ssh_config

@@ -1,0 +1,25 @@
+##### Special local ssh_config file for special controling by arch-tester
+##### For extra info look at `man 5 ssh_config`
+
+### Gentoo username for login
+User larry
+ControlPath /tmp/arch-tester/control/%n
+ControlMaster auto
+
+### The last argument is the name of the arch-tester socket on remote machine
+### In case it differs across machines, set it inside every Host
+LocalForward /tmp/arch-tester/comm/%n /home/larry/arch-tester/arch-tester.socket
+
+### List of hosts.
+### Every Host 
+#
+# Host {short name}
+#     Hostname {full hostname url}
+#
+### as example:
+# Host arm
+#     Hostname kamaji.arm.dev.gentoo.org
+#
+# Host ppc
+#     Hostname timberdoodle.ppc64.dev.gentoo.org
+#
