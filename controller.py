@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from argparse import ArgumentError, ArgumentParser
 from typing import Dict, List, Tuple, Iterator
 from datetime import datetime

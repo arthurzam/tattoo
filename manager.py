@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from typing import Dict
 import asyncio
 import os
