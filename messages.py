@@ -41,6 +41,16 @@ class DoScan():
     pass
 
 
+class GetLoad():
+    pass
+
+
+class LoadResponse(NamedTuple):
+    load1: float
+    load5: float
+    load15: float
+
+
 def dump(obj) -> bytes:
     return base64.b64encode(pickle.dumps(obj)) + b'\n'
 

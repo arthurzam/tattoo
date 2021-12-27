@@ -1,7 +1,8 @@
-from argparse import ArgumentParser
-from typing import Dict, Iterator
+from argparse import ArgumentError, ArgumentParser
+from typing import Dict, List, Tuple, Iterator
 from datetime import datetime
 from shutil import rmtree
+from pathlib import Path
 import asyncio
 import os
 
@@ -37,6 +38,62 @@ async def run_ssh(*extra_args) -> bool:
     return 0 == await proc.wait()
 
 
+def apply_passes(passes: List[Tuple[int, str]]):
+    from nattka.bugzilla import NattkaBugzilla, BugCategory
+    from nattka.package import find_repository, match_package_list, add_keywords
+    from nattka.git import GitWorkTree, git_commit
+    from nattka import __main__
+
+    if api_key := os.getenv('ARCHTESTER_BUGZILLA_APIKEY'):
+        nattka_bugzilla = NattkaBugzilla(api_key=api_key)
+    else:
+        raise ArgumentError(None, "To apply and resolve, set ARCHTESTER_BUGZILLA_APIKEY")
+    _, repo = find_repository(Path(options.fetch_repo))
+    git_repo = GitWorkTree(Path(options.fetch_repo))
+
+    divided = {bug_no: [a for x, a in passes if x == bug_no] for bug_no, _ in passes}
+
+    for bug_no, bug in nattka_bugzilla.find_bugs(bugs=divided.keys()).items():
+        for arch in divided[bug_no]:
+            if arch not in bug.cc and f'{arch}@gentoo.org' not in bug.cc:
+                continue
+            try:
+                plist = dict(match_package_list(repo, bug, only_new=True, filter_arch=[arch], permit_allarches=True))
+                allarches = 'ALLARCHES' in bug.keywords
+                add_keywords(plist.items(), bug.category == BugCategory.STABLEREQ)
+                for p in list(plist):
+                    keywords = [k for k in plist[p] if k in arch]
+                    if not keywords:
+                        continue
+
+                    ebuild_path = Path(p.path).relative_to(repo.location)
+                    pfx = f'{p.category}/{p.package}'
+                    act = ('Stabilize' if bug.category == BugCategory.STABLEREQ else 'Keyword')
+                    kws = 'ALLARCHES' if allarches else ' '.join(keywords)
+                    msg = f'{pfx}: {act} {p.fullver} {kws}, #{bug_no}'
+                    print(git_commit(git_repo.path, msg, [str(ebuild_path)]))
+                if options.fetch_resolve:
+                    to_remove = bug.cc if allarches else [f'{arch}@gentoo.org']
+                    all_done = len(bug.cc) == 1 or allarches
+                    to_close = (not bug.security) and all_done
+                    if allarches:
+                        comment = " ".join((f'[{a}]' if a == arch else a for a in sorted(to_remove))) + " (ALLARCHES) done"
+                    else:
+                        comment = f'{arch} done'
+                    if all_done:
+                        comment += '\n\nall arches done'
+                    nattka_bugzilla.resolve_bug(
+                        bugno=bug_no,
+                        uncc=sorted(to_remove),
+                        comment=comment,
+                        resolve=to_close
+                    )
+            except Exception as e:
+                print(f'failed to apply for: {bug_no},{arch}')
+                print(e)
+                continue
+
+
 async def handler(name: str):
     socket_file = base_dir + os.path.sep + name
     if not os.path.exists(socket_file):
@@ -62,10 +119,8 @@ async def handler(name: str):
         if isinstance(data, messages.CompletedJobsResponse):
             for bug_no, arch in data.passes:
                 print(f'{bug_no},{arch}')
-            if options.fetch_apply and not options.fetch_dryrun:
-                pass # TODO: implement
-                if options.fetch_resolve:
-                    pass # TODO: implement
+            if data.passes and options.fetch_apply and options.fetch_repo:
+                apply_passes(data.passes)
             fetch_datetimes[name] = now
 
     writer.close()
@@ -93,7 +148,6 @@ fetch_parser.add_argument("-r", "--resolve", dest="fetch_resolve", action="store
                           help="Resolve all passing bugs on repo")
 
 options = parser.parse_args()
-
 
 loop = asyncio.get_event_loop()
 if options.connect:

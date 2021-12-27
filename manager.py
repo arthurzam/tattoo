@@ -40,13 +40,14 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                         await workers[worker].drain()
                 elif isinstance(data, messages.BugJobDone):
                     db.report_job(worker, data)
-                    if data.success:
-                        print(f'{data.bug_number},{worker.canonical_arch()}')
                 elif isinstance(data, messages.CompletedJobsRequest):
                     writer.write(messages.dump(db.get_reportes(data.since)))
                     await writer.drain()
                 elif isinstance(data, messages.DoScan):
                     asyncio.ensure_future(do_scan())
+                elif isinstance(data, messages.GetLoad):
+                    writer.write(messages.dump(messages.LoadResponse(*os.getloadavg())))
+                    await writer.drain()
             else:
                 break
 
