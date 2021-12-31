@@ -25,10 +25,10 @@ class DB():
 
     def report_job(self, worker: messages.Worker, job: messages.BugJobDone):
         insert_query = """
-            REPLACE INTO tests (arch, bug_no, state, machine_name) VALUES (?, ?, ?, ?);
+            REPLACE INTO tests (arch, machine_name, bug_no, state) VALUES (?, ?, ?, ?);
         """
         with self.conn:
-            self.conn.execute(insert_query, (worker.canonical_arch(), job.bug_number, worker.name, int(job.success)))
+            self.conn.execute(insert_query, (worker.canonical_arch(), worker.name, job.bug_number, int(job.success)))
     
     def get_reportes(self, since: datetime) -> messages.CompletedJobsResponse:
         select_query = """
@@ -41,7 +41,7 @@ class DB():
         return messages.CompletedJobsResponse(passes, failed)
     
     def filter_not_tested(self, arch: str, bugs: Iterator[int]) -> Iterator[int]:
-        bugs = set(bugs)
+        bugs = frozenset(bugs)
         select_query = f"""
             SELECT bug_no FROM tests WHERE bug_no in {tuple(bugs)} AND arch = ?;
         """

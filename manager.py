@@ -25,8 +25,18 @@ async def auto_scan(interval: int):
         await asyncio.sleep(interval)
         await do_scan()
 
+async def periodic_keepalive(writer: asyncio.StreamWriter):
+    try:
+        while not writer.is_closing():
+            writer.write(messages.dump(None))
+            await writer.drain()
+            await asyncio.sleep(600)
+    except asyncio.CancelledError:
+        pass
+
 async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     worker = messages.Worker(name='', arch='')
+    keepaliver = None
     try:
         while True:
             if data := await reader.readuntil(b'\n'):
@@ -36,11 +46,14 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                         worker = data
                         workers[data] = writer
                         print(worker.name, 'of type', worker.arch, 'connected')
+                        keepaliver = asyncio.ensure_future(periodic_keepalive(writer))
                 elif isinstance(data, messages.GlobalJob):
+                    print('jobs:', data.bugs)
                     for worker, bugs in bugs_fetcher.collect_bugs(data.bugs, *workers.keys()):
                         workers[worker].write(messages.dump(messages.GlobalJob(bugs)))
                         await workers[worker].drain()
                 elif isinstance(data, messages.BugJobDone):
+                    print(f'{data.bug_number},{worker.canonical_arch()}')
                     db.report_job(worker, data)
                 elif isinstance(data, messages.CompletedJobsRequest):
                     writer.write(messages.dump(db.get_reportes(data.since)))
@@ -60,6 +73,8 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     except ConnectionResetError:
         print('Closed')
     
+    if keepaliver:
+        keepaliver.cancel()
     workers.pop(worker, None)
 
 

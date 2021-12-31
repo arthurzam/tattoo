@@ -34,22 +34,28 @@ async def test_run(bugnum: int) -> bool:
         send_irker(bugnum, 'tatt -b failed')
         return False
 
-    async with sema:
+    print(test_run.sema._value)
+    await test_run.sema.acquire()
+    try:
         proc = await asyncio.create_subprocess_exec(
             f'/tmp/run/{bugnum}-useflags.sh',
             stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             preexec_fn=os.setpgrp,
-            cwd="/tmp/run"
+            cwd="/tmp/run",
         )
         if 0 != await proc.wait():
             send_irker(bugnum, 'fail')
-            raise Exception('Unable to useflag')
+            return False
         else:
             send_irker(bugnum, 'success')
+    finally:
+        test_run.sema.release()
 
     proc = await asyncio.create_subprocess_exec(
         f'/tmp/run/{bugnum}-cleanup.sh',
         stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         preexec_fn=os.setpgrp,
         cwd="/tmp/run"
     )
@@ -59,8 +65,11 @@ async def test_run(bugnum: int) -> bool:
 
 async def handle_bug_job(writer: asyncio.StreamWriter, bug_no: int) -> None:
     print('started', bug_no)
-    writer.write(messages.dump(messages.BugJobDone(bug_number=bug_no, success=await test_run(bug_no))))
-    await writer.drain()
+    try:
+        writer.write(messages.dump(messages.BugJobDone(bug_number=bug_no, success=await test_run(bug_no))))
+        await writer.drain()
+    finally:
+        pass
 
 
 async def handler():
@@ -73,10 +82,13 @@ async def handler():
             if data := await reader.readuntil(b'\n'):
                 data = messages.load(data)
                 if isinstance(data, messages.GlobalJob):
-                    print(data.bugs)
-                    for _, bugs in bugs_fetcher.collect_bugs(data.bugs, worker):
-                        for bug_no in bugs:
-                            asyncio.ensure_future(handle_bug_job(writer, bug_no))
+                    print('Jobs', data.bugs)
+                    try:
+                        for _, bugs in bugs_fetcher.collect_bugs(data.bugs, worker):
+                            for bug_no in bugs:
+                                asyncio.ensure_future(handle_bug_job(writer, bug_no))
+                    finally:
+                        pass
             else:
                 break
     except EOFError:
@@ -93,7 +105,7 @@ parser.add_argument("-j", "--jobs", dest="jobs", type=int, action="store", defau
                     help="Amount of simultaneous testing jobs")
 options = parser.parse_args()
 
-sema = asyncio.BoundedSemaphore(options.jobs)
+test_run.sema = asyncio.Semaphore(options.jobs)
 
 if not os.path.exists('/tmp/run'):
     os.mkdir('/tmp/run')

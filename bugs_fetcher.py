@@ -26,7 +26,7 @@ def collect_bugs(bugs_no: Iterator[int], *workers: Iterator[messages.Worker]) ->
         def check(bug: BugInfo):
             return (
                 (bug.category == BugCategory.KEYWORDREQ) == worker.is_rekeyword() and
-                worker.canonical_arch() in bug.cc
+                worker.canonical_arch() in (cc.removesuffix('@gentoo.org') for cc in bug.cc)
             )
         if ok_bugs := [bug_no for bug_no, bug in bugs.items() if check(bug)]:
             yield worker, ok_bugs
