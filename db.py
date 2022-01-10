@@ -43,7 +43,7 @@ class DB():
     def filter_not_tested(self, arch: str, bugs: Iterator[int]) -> Iterator[int]:
         bugs = frozenset(bugs)
         select_query = f"""
-            SELECT bug_no FROM tests WHERE bug_no in {tuple(bugs)} AND arch = ?;
+            SELECT bug_no FROM tests WHERE bug_no in ({','.join(map(str, bugs))}) AND arch = ?;
         """
         with self.conn:
             done = {row[0] for row in self.conn.execute(select_query, [arch])}

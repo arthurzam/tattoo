@@ -15,6 +15,10 @@ class Worker(NamedTuple):
         return self.arch.startswith('~')
 
 
+class Follower():
+    pass
+
+
 class BugJob(NamedTuple):
     bug_number: int
 
@@ -35,6 +39,11 @@ class CompletedJobsRequest(NamedTuple):
 class CompletedJobsResponse(NamedTuple):
     passes: List[Tuple[int, str]]
     failed: List[Tuple[int, str]]
+
+
+class LogMessage(NamedTuple):
+    worker: Worker
+    msg: str
 
 
 class DoScan():

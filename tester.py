@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
+from typing import Any, Callable
 from argparse import ArgumentParser
 from json import JSONEncoder
+from time import sleep
 import subprocess
 import asyncio
 import socket
@@ -10,71 +12,84 @@ import os
 import bugs_fetcher
 import messages
 
+import logging
+logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.NOTSET)
+
+testing_dir = '/tmp/run'
+
 
 def send_irker(bugno: int, msg: str):
     irker_listener = ("127.0.0.1", 6659)
     irker_spigot = "ircs://irc.libera.chat:6697/#gentoo-arthurzam"
     message = f"\x0314[{options.name}]: \x0305bug #{bugno}\x0F - {msg}"
     json_msg = JSONEncoder().encode({"to": irker_spigot, "privmsg": message})
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(json_msg.encode("utf8"), irker_listener)
+        sock.close()
+    except Exception as e:
+        logging.error('send to irker failed', exc_info=e)
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.sendto(json_msg.encode("utf8"), irker_listener)
-    sock.close()
 
-
-async def test_run(bugnum: int) -> bool:
-    proc = await asyncio.create_subprocess_exec(
-        'tatt', '-b', str(bugnum), '-j', str(bugnum),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        preexec_fn=os.setpgrp,
-        cwd="/tmp/run"
-    )
-    if 0 != await proc.wait():
-        send_irker(bugnum, 'tatt -b failed')
-        return False
-
-    print(test_run.sema._value)
-    await test_run.sema.acquire()
+async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
+    await jobs_semaphore.acquire()
     try:
         proc = await asyncio.create_subprocess_exec(
-            f'/tmp/run/{bugnum}-useflags.sh',
+            'tatt', '-b', str(bug_no), '-j', str(bug_no),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             preexec_fn=os.setpgrp,
-            cwd="/tmp/run",
+            cwd=testing_dir,
         )
         if 0 != await proc.wait():
-            send_irker(bugnum, 'fail')
-            return False
-        else:
-            send_irker(bugnum, 'success')
+            logging.error('failed with tatt -b %d', bug_no)
+            return 'tatt failed'
+
+        await writer(messages.LogMessage(worker, f'Started testing of bug #{bug_no}'))
+        proc = await asyncio.create_subprocess_exec(
+            f'/tmp/run/{bug_no}-useflags.sh',
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            preexec_fn=os.setpgrp,
+            cwd=testing_dir,
+        )
+        if 0 != await proc.wait():
+            await writer(messages.BugJobDone(bug_number=bug_no, success=False))
+            return 'fail'
+        await writer(messages.BugJobDone(bug_number=bug_no, success=True))
     finally:
-        test_run.sema.release()
+        jobs_semaphore.release()
 
     proc = await asyncio.create_subprocess_exec(
-        f'/tmp/run/{bugnum}-cleanup.sh',
+        f'/tmp/run/{bug_no}-cleanup.sh',
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         preexec_fn=os.setpgrp,
-        cwd="/tmp/run"
+        cwd=testing_dir,
     )
     await proc.wait()
-    return True
+    return ''
 
 
-async def handle_bug_job(writer: asyncio.StreamWriter, bug_no: int) -> None:
-    print('started', bug_no)
+async def handle_bug_job(writer: Callable[[Any], Any], bug_no: int) -> None:
     try:
-        writer.write(messages.dump(messages.BugJobDone(bug_number=bug_no, success=await test_run(bug_no))))
-        await writer.drain()
-    finally:
+        result = await test_run(writer, bug_no)
+        send_irker(bug_no, result or 'success')
+    except Exception as e:
+        result = f'error: {e}'
+    try:
+        await writer(messages.LogMessage(worker, f'Finished testing of bug #{bug_no} {result}'))
+    except:
         pass
 
 
 async def handler():
+    logging.info('connecting')
     reader, writer = await asyncio.open_unix_connection(path=messages.socket_filename)
-    worker = messages.Worker(name=options.name, arch=options.arch)
+    def writer_func(obj: Any):
+        writer.write(messages.dump(obj))
+        return writer.drain()
+    
     writer.write(messages.dump(worker))
     await writer.drain()
     try:
@@ -82,19 +97,28 @@ async def handler():
             if data := await reader.readuntil(b'\n'):
                 data = messages.load(data)
                 if isinstance(data, messages.GlobalJob):
-                    print('Jobs', data.bugs)
+                    await writer_func(messages.LogMessage(worker, f'Got job requests {data.bugs}'))
                     try:
                         for _, bugs in bugs_fetcher.collect_bugs(data.bugs, worker):
+                            await writer_func(messages.LogMessage(worker, f'Will test {bugs}'))
                             for bug_no in bugs:
-                                asyncio.ensure_future(handle_bug_job(writer, bug_no))
-                    finally:
-                        pass
+                                logging.debug(bug_no)
+                                asyncio.ensure_future(handle_bug_job(writer_func, bug_no))
+                    except Exception as e:
+                        logging.error('GlobalJob', exc_info=e)
+                        await writer_func(messages.LogMessage(worker, f'Failed with: {e}'))
             else:
-                break
-    except EOFError:
-        print('EOF')
+                logging.debug('closing')
+    except asyncio.exceptions.IncompleteReadError:
+        logging.warning('IncompleteReadError')
     except ConnectionResetError:
-        print('Closed')
+        logging.warning('ConnectionResetError')
+    except Exception as e:
+        logging.error('Unknown', exc_info=e)
+    finally:
+        writer.close()
+        await writer.wait_closed()
+        logging.debug('closing')
 
 parser = ArgumentParser()
 parser.add_argument("-n", "--name", dest="name", action="store", required=True,
@@ -105,11 +129,16 @@ parser.add_argument("-j", "--jobs", dest="jobs", type=int, action="store", defau
                     help="Amount of simultaneous testing jobs")
 options = parser.parse_args()
 
-test_run.sema = asyncio.Semaphore(options.jobs)
+jobs_semaphore = asyncio.Semaphore(options.jobs)
+worker = messages.Worker(name=options.name, arch=options.arch)
 
-if not os.path.exists('/tmp/run'):
-    os.mkdir('/tmp/run')
+if not os.path.exists(testing_dir):
+    os.mkdir(testing_dir)
 
 loop = asyncio.get_event_loop()
 if os.path.exists(messages.socket_filename):
-    loop.run_until_complete(handler())
+    for _ in range(5):
+        try:
+            loop.run_until_complete(handler())
+        except:
+            sleep(0.5)

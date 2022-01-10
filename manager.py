@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from typing import Dict
+from typing import Dict, Optional
 import asyncio
 import os
 
@@ -8,15 +8,20 @@ from db import DB
 import messages
 import bugs_fetcher
 
+import logging
+logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.NOTSET)
 
 loop = asyncio.get_event_loop()
 workers: Dict[messages.Worker, asyncio.StreamWriter] = {}
+follower: Optional[asyncio.StreamWriter] = None
 
 db = DB()
 
 async def do_scan():
+    logging.info('started scan for new bugs')
     for worker, bugs in bugs_fetcher.collect_bugs([], *workers.keys()):
         if bugs := list(db.filter_not_tested(worker.canonical_arch(), bugs)):
+            logging.info(f'sent to {worker.name} bugs {bugs}')
             workers[worker].write(messages.dump(messages.GlobalJob(bugs)))
             await workers[worker].drain()
 
@@ -36,24 +41,37 @@ async def periodic_keepalive(writer: asyncio.StreamWriter):
 
 async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     worker = messages.Worker(name='', arch='')
+    is_follower = False
     keepaliver = None
     try:
         while True:
-            if data := await reader.readuntil(b'\n'):
+            try:
+                data = await reader.readline()
+                if not data:
+                    break
+            except asyncio.exceptions.IncompleteReadError as e:
+                logging.info('pos')
+                data = e.partial
+            if data:
                 data = messages.load(data)
                 if isinstance(data, messages.Worker):
                     if data.arch:
                         worker = data
                         workers[data] = writer
-                        print(worker.name, 'of type', worker.arch, 'connected')
+                        logging.info('%s of %s connected', worker.name, worker.arch)
                         keepaliver = asyncio.ensure_future(periodic_keepalive(writer))
+                elif isinstance(data, messages.Follower):
+                    global follower
+                    if is_follower := follower is None:
+                        follower = writer
                 elif isinstance(data, messages.GlobalJob):
-                    print('jobs:', data.bugs)
+                    logging.debug(f'got bugs {data.bugs}')
                     for worker, bugs in bugs_fetcher.collect_bugs(data.bugs, *workers.keys()):
+                        logging.info(f'sent to {worker.name} bugs {bugs}')
                         workers[worker].write(messages.dump(messages.GlobalJob(bugs)))
                         await workers[worker].drain()
                 elif isinstance(data, messages.BugJobDone):
-                    print(f'{data.bug_number},{worker.canonical_arch()}')
+                    logging.debug('done %d,%s', data.bug_number, worker.canonical_arch())
                     db.report_job(worker, data)
                 elif isinstance(data, messages.CompletedJobsRequest):
                     writer.write(messages.dump(db.get_reportes(data.since)))
@@ -63,18 +81,26 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                 elif isinstance(data, messages.GetLoad):
                     writer.write(messages.dump(messages.LoadResponse(*os.getloadavg())))
                     await writer.drain()
-            else:
-                break
+                elif isinstance(data, messages.LogMessage):
+                    if follower:
+                        follower.write(messages.dump(data))
+                        await follower.drain()
 
+        logging.warning('[%s] simple close', worker.name)
+    except asyncio.exceptions.IncompleteReadError as e:
+        logging.warning('[%s] IncompleteReadError', worker.name, exc_info=e)
+    except ConnectionResetError:
+        logging.warning('[%s] ConnectionResetError', worker.name)
+    finally:
         writer.close()
         await writer.wait_closed()
-    except asyncio.exceptions.IncompleteReadError:
-        pass
-    except ConnectionResetError:
-        print('Closed')
     
     if keepaliver:
         keepaliver.cancel()
+    if is_follower:
+        follower = None
+    if worker.name:
+        logging.warning('[%s] we lost', worker.name)
     workers.pop(worker, None)
 
 
