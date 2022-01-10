@@ -1,3 +1,10 @@
+# Naming origin
+
+Well, naming things is very hard. Thankfully we have an excellent team at
+Gentoo capable of naming things - The Infra team. Alec Warner (antarus)
+was kind enough to decide on the name "tattoo", which came from combining
+"tatt" (package testing tool used here) and "Gentoo".
+
 # Setup
 
 ## Developer's own machine
