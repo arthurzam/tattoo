@@ -6,7 +6,7 @@ import messages
 
 
 class DB():
-    db_file = 'arch-tester.db'
+    db_file = 'tattoo.db'
 
     def __init__(self) -> None:
         results_tables = """

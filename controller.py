@@ -10,7 +10,7 @@ import os
 
 import messages
 
-base_dir = Path('/tmp/arch-tester')
+base_dir = Path('/tmp/tattoo')
 comm_dir = base_dir / 'comm'
 fetch_datetime_file = Path.cwd() / 'controller.datetime.txt'
 

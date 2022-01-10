@@ -20,7 +20,7 @@
     * `app-portage/nattka`
 2. Select the directory from which we will work. Always run and set files
     inside this directory. It can be the source files directory. It must be the
-    same directory as set in the ssh_config directory (by default `~/arch-tester`)
+    same directory as set in the ssh_config directory (by default `~/tattoo`)
 
 ## Remote machine - testing container
 
@@ -45,11 +45,11 @@
 
 ## Load all remote machines
 
-1. Run in selected directory (for example `~/arch-tester`) the command
+1. Run in selected directory (for example `~/tattoo`) the command
     `./manager.py`.
-    * Inside this directory a file named `arch-tester.socket` will be created.
+    * Inside this directory a file named `tattoo.socket` will be created.
         Through this socket all communication will occur.
-    * A SQLite DB named `arch-tester.db` will hold all successes and failures
+    * A SQLite DB named `tattoo.db` will hold all successes and failures
         of test runs.
 2. In every container on that machine, run the command
     `./tester.py -n [NAME] -a [ARCH] -j [JOBS]` where `NAME` is just a nice
@@ -57,13 +57,13 @@
     with `amd64` for stable bugs, and `~arm` for keyword bugs. `JOBS` is the
     maximal concurrent testing jobs.
     * This command must be ran in the mount bound dir from manager, where the
-        `arch-tester.socket` is created (so it can communicate).
+        `tattoo.socket` is created (so it can communicate).
 3. Check that the `manager` logs all containers connecting to it.
 
 ## Control from developer's own machine
 
 1. Connect to remote servers listed in `ssh_config` using `./controller.py -c`.
-    Various sockets are created inside `/tmp/arch-tester/` directory
+    Various sockets are created inside `/tmp/tattoo/` directory
 2. Send specific bugs using `./controller.py -b {NUM} {NUM} ...` or initiate
     full scan for open bugs per arch using `./controller.py -s`
 3. You can use "follower" mode to get live logs from all machines and testers

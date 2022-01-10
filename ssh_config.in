@@ -1,14 +1,14 @@
-##### Special local ssh_config file for special controling by arch-tester
+##### Special local ssh_config file for special controling by tattoo
 ##### For extra info look at `man 5 ssh_config`
 
 ### Gentoo username for login
 User larry
-ControlPath /tmp/arch-tester/control/%n
+ControlPath /tmp/tattoo/control/%n
 ControlMaster auto
 
-### The last argument is the name of the arch-tester socket on remote machine
+### The last argument is the name of the tattoo socket on remote machine
 ### In case it differs across machines, set it inside every Host
-LocalForward /tmp/arch-tester/comm/%n /home/larry/arch-tester/arch-tester.socket
+LocalForward /tmp/tattoo/comm/%n /home/larry/tattoo/tattoo.socket
 
 ### List of hosts.
 ### Every Host 
