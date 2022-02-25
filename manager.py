@@ -107,6 +107,7 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
 def main():
     if os.path.exists(messages.socket_filename):
         os.remove(messages.socket_filename)
+    asyncio.set_event_loop(loop := asyncio.new_event_loop())
     loop.run_until_complete(asyncio.start_unix_server(handler, path=messages.socket_filename))
     os.chmod(messages.socket_filename, 0o666)
     # asyncio.ensure_future(auto_scan(3600))

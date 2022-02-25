@@ -1,4 +1,4 @@
-# Naming origin
+# Project name origin
 
 Well, naming things is very hard. Thankfully we have an excellent team at
 Gentoo capable of naming things - The Infra team. Alec Warner (antarus)

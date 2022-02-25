@@ -2,11 +2,12 @@
 
 from typing import Any, Callable
 from argparse import ArgumentParser
-from json import JSONEncoder
 from time import sleep
+import contextlib
 import subprocess
 import asyncio
 import socket
+import json
 import os
 
 import bugs_fetcher
@@ -17,23 +18,39 @@ logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.NOTSET)
 
 testing_dir = '/tmp/run'
 
+class IrkerSender(asyncio.DatagramProtocol):
+    IRC_CHANNEL = "#gentoo-arthurzam"
 
-def send_irker(bugno: int, msg: str):
-    irker_listener = ("127.0.0.1", 6659)
-    irker_spigot = "ircs://irc.libera.chat:6697/#gentoo-arthurzam"
-    message = f"\x0314[{options.name}]: \x0305bug #{bugno}\x0F - {msg}"
-    json_msg = JSONEncoder().encode({"to": irker_spigot, "privmsg": message})
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(json_msg.encode("utf8"), irker_listener)
-        sock.close()
-    except Exception as e:
-        logging.error('send to irker failed', exc_info=e)
+    def __init__(self, bugno: int, msg: str):
+        irker_spigot = f"ircs://irc.libera.chat:6697/{IrkerSender.IRC_CHANNEL}"
+        message = f"\x0314[{options.name}]: \x0305bug #{bugno}\x0F - {msg}"
+        self.message = json.dumps({"to": irker_spigot, "privmsg": message}).encode("utf8")
+
+    def connection_made(self, transport):
+        transport.sendto(self.message)
+        transport.close()
+
+    def error_received(self, exc):
+        logging.error('send to irker failed', exc_info=exc)
+
+    @staticmethod
+    async def send_message(bugno: int, msg: str):
+        await asyncio.get_event_loop().create_datagram_endpoint(
+            lambda: IrkerSender(bugno, msg),
+            remote_addr=("127.0.0.1", 6659)
+        )
+
+
+def collect_zombies():
+    with contextlib.suppress(Exception):
+        while True:
+            cpid, _ = os.waitpid(-1, os.WNOHANG)
+            if cpid == 0:
+                break
 
 
 async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
-    await jobs_semaphore.acquire()
-    try:
+    async with jobs_semaphore:
         proc = await asyncio.create_subprocess_exec(
             'tatt', '-b', str(bug_no), '-j', str(bug_no),
             stdout=subprocess.DEVNULL,
@@ -57,8 +74,6 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
             await writer(messages.BugJobDone(bug_number=bug_no, success=False))
             return 'fail'
         await writer(messages.BugJobDone(bug_number=bug_no, success=True))
-    finally:
-        jobs_semaphore.release()
 
     proc = await asyncio.create_subprocess_exec(
         f'/tmp/run/{bug_no}-cleanup.sh',
@@ -74,13 +89,12 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
 async def handle_bug_job(writer: Callable[[Any], Any], bug_no: int) -> None:
     try:
         result = await test_run(writer, bug_no)
-        send_irker(bug_no, result or 'success')
+        collect_zombies()
+        await IrkerSender.send_message(bug_no, result or 'success')
     except Exception as e:
         result = f'error: {e}'
-    try:
+    with contextlib.suppress(Exception):
         await writer(messages.LogMessage(worker, f'Finished testing of bug #{bug_no} {result}'))
-    except:
-        pass
 
 
 async def handler():
@@ -89,7 +103,7 @@ async def handler():
     def writer_func(obj: Any):
         writer.write(messages.dump(obj))
         return writer.drain()
-    
+
     writer.write(messages.dump(worker))
     await writer.drain()
     try:
@@ -116,8 +130,9 @@ async def handler():
     except Exception as e:
         logging.error('Unknown', exc_info=e)
     finally:
-        writer.close()
-        await writer.wait_closed()
+        with contextlib.suppress(Exception):
+            writer.close()
+            await writer.wait_closed()
         logging.debug('closing')
 
 parser = ArgumentParser()
@@ -135,7 +150,7 @@ worker = messages.Worker(name=options.name, arch=options.arch)
 if not os.path.exists(testing_dir):
     os.mkdir(testing_dir)
 
-loop = asyncio.get_event_loop()
+asyncio.set_event_loop(loop := asyncio.new_event_loop())
 if os.path.exists(messages.socket_filename):
     for _ in range(5):
         try:

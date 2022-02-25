@@ -3,10 +3,12 @@
 from argparse import ArgumentError, ArgumentParser
 from typing import Dict, List, Tuple, Iterator
 from datetime import datetime
-from shutil import rmtree
 from pathlib import Path
+import contextlib
 import asyncio
 import os
+
+from pkgcheck import keywords
 
 import messages
 
@@ -16,7 +18,7 @@ fetch_datetime_file = Path.cwd() / 'controller.datetime.txt'
 
 
 def collect_ssh_hosts() -> Iterator[str]:
-    with open('ssh_config') as f:
+    with open(Path.cwd() / 'ssh_config') as f:
         for row in f:
             if row.startswith('Host '):
                 yield row.removeprefix('Host ').strip()
@@ -24,25 +26,22 @@ def collect_ssh_hosts() -> Iterator[str]:
 
 def read_fetch_datetimes() -> Dict[str, datetime]:
     res = {}
-    try:
+    with contextlib.suppress(Exception):
         with fetch_datetime_file.open() as f:
             for line in f:
-                try:
+                with contextlib.suppress(Exception):
                     system, datetime_s = line.rstrip('\n').split('=', maxsplit=1)
                     res[system] = datetime.fromisoformat(datetime_s)
-                except:
-                    pass
-    except:
-        pass
     return res
 
 
 async def run_ssh(*extra_args) -> bool:
-    proc = await asyncio.create_subprocess_exec(
-        'ssh', '-F', 'ssh_config', '-T', *extra_args,
-        preexec_fn=os.setpgrp,
-    )
-    return 0 == await proc.wait()
+    with contextlib.suppress(Exception):
+        proc = await asyncio.create_subprocess_exec(
+            'ssh', '-F', 'ssh_config', '-T', *extra_args,
+            preexec_fn=os.setpgrp,
+        )
+        return 0 == await proc.wait()
 
 
 def connect():
@@ -72,29 +71,30 @@ def apply_passes(passes: List[Tuple[int, str]]):
     if api_key := os.getenv('ARCHTESTER_BUGZILLA_APIKEY'):
         nattka_bugzilla = NattkaBugzilla(api_key=api_key)
     else:
-        raise ArgumentError(None, "To apply and resolve, set ARCHTESTER_BUGZILLA_APIKEY")
+        raise ArgumentError(None, "To apply and resolve, set environment variable ARCHTESTER_BUGZILLA_APIKEY")
     _, repo = find_repository(Path(options.fetch_repo))
     git_repo = GitWorkTree(Path(options.fetch_repo))
 
     divided = {bug_no: frozenset(a for x, a in passes if x == bug_no) for bug_no, _ in passes}
 
     for bug_no, bug in nattka_bugzilla.find_bugs(bugs=divided.keys()).items():
-        bug_cc = tuple(arches_from_cc(bug.cc, repo.known_arches))
-        for arch in divided[bug_no].intersection(bug_cc):
+        bug_cc = list(arches_from_cc(bug.cc, repo.known_arches))
+        for arch in divided[bug_no]:
+            if arch not in bug_cc:
+                continue
             try:
                 plist = dict(match_package_list(repo, bug, only_new=True, filter_arch=[arch], permit_allarches=True))
                 allarches = 'ALLARCHES' in bug.keywords
                 add_keywords(plist.items(), bug.category == BugCategory.STABLEREQ)
-                for p in plist.keys():
-                    keywords = [k for k in plist[p] if k in arch]
-                    if not keywords:
+                for pkg, keywords in plist.items():
+                    if arch not in keywords:
                         continue
 
-                    ebuild_path = Path(p.path).relative_to(repo.location)
-                    pfx = f'{p.category}/{p.package}'
+                    ebuild_path = Path(pkg.path).relative_to(repo.location)
+                    pfx = f'{pkg.category}/{pkg.package}'
                     act = ('Stabilize' if bug.category == BugCategory.STABLEREQ else 'Keyword')
-                    kws = 'ALLARCHES' if allarches else ' '.join(keywords)
-                    msg = f'{pfx}: {act} {p.fullver} {kws}, #{bug_no}'
+                    kws = 'ALLARCHES' if allarches else arch
+                    msg = f'{pfx}: {act} {pkg.fullver} {kws}, #{bug_no}'
                     print(git_commit(git_repo.path, msg, [str(ebuild_path)]))
                 if options.fetch_resolve:
                     to_remove = bug_cc if allarches else [arch]
@@ -113,6 +113,8 @@ def apply_passes(passes: List[Tuple[int, str]]):
                         comment=comment,
                         resolve=to_close
                     )
+                    for arch in to_remove:
+                        bug_cc.remove(arch)
             except Exception as e:
                 print(f'failed to apply for {bug_no},{arch} , err:', e)
 
@@ -147,7 +149,7 @@ async def handler(socket_file: Path):
     elif options.action == 'follower':
         writer.write(messages.dump(messages.Follower()))
         await writer.drain()
-        try:
+        with contextlib.suppress(Exception):
             while True:
                 if data := await reader.readuntil(b'\n'):
                     data = messages.load(data)
@@ -158,8 +160,6 @@ async def handler(socket_file: Path):
 
             writer.close()
             await writer.wait_closed()
-        finally:
-            pass
 
     writer.close()
     await writer.wait_closed()
@@ -182,17 +182,17 @@ def argv_parser() -> ArgumentParser:
 
     fetch_parser = subparsers.add_parser('fetch')
     fetch_parser.add_argument("-d", "--repo", dest="fetch_repo", action="store",
-                            help="Repository to work on")
+                              help="Repository to work on")
     fetch_parser.add_argument("-n", "--dry-run", dest="fetch_dryrun", action="store_true",
-                            help="Apply and commit all passing bugs on repo")
+                              help="Apply and commit all passing bugs on repo")
     fetch_parser.add_argument("-a", "--apply", dest="fetch_apply", action="store_true",
-                            help="Apply and commit all passing bugs on repo")
+                              help="Apply and commit all passing bugs on repo")
     fetch_parser.add_argument("-r", "--resolve", dest="fetch_resolve", action="store_true",
-                            help="Resolve all passing bugs on repo")
+                              help="Resolve all passing bugs on repo")
     return parser
 
 options = argv_parser().parse_args()
-loop = asyncio.get_event_loop()
+asyncio.set_event_loop(loop := asyncio.new_event_loop())
 
 if options.connect:
     connect()
