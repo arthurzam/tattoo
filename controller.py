@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 
 from argparse import ArgumentError, ArgumentParser
-from typing import Dict, List, Tuple, Iterator
+from typing import Iterator
 from datetime import datetime
 from pathlib import Path
 import contextlib
+import subprocess
 import asyncio
 import os
 
-from pkgcheck import keywords
+import logging
+logging.basicConfig(format='{asctime} | [{levelname}] {message}', style='{', level=logging.INFO)
 
 import messages
 
@@ -24,7 +26,7 @@ def collect_ssh_hosts() -> Iterator[str]:
                 yield row.removeprefix('Host ').strip()
 
 
-def read_fetch_datetimes() -> Dict[str, datetime]:
+def read_fetch_datetimes() -> dict[str, datetime]:
     res = {}
     with contextlib.suppress(Exception):
         with fetch_datetime_file.open() as f:
@@ -36,12 +38,20 @@ def read_fetch_datetimes() -> Dict[str, datetime]:
 
 
 async def run_ssh(*extra_args) -> bool:
-    with contextlib.suppress(Exception):
+    try:
+        logging.info("running 'ssh -F ssh_config -T %s'", ' '.join(extra_args))
         proc = await asyncio.create_subprocess_exec(
             'ssh', '-F', 'ssh_config', '-T', *extra_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             preexec_fn=os.setpgrp,
         )
-        return 0 == await proc.wait()
+        stdout, _ = await proc.communicate()
+        if 0 != proc.returncode:
+            logging.error("running 'ssh -F ssh_config -T %s' failed with:\n%s", ' '.join(extra_args), stdout.decode('utf8'))
+        return 0 == proc.returncode
+    except Exception as e:
+        logging.error("running 'ssh -F ssh_config -T %s' failed", ' '.join(extra_args), exc_info=e)
 
 
 def connect():
@@ -49,12 +59,15 @@ def connect():
     for existing in comm_dir.iterdir():
         existing.unlink()
     os.makedirs(base_dir / 'control', exist_ok=True)
-    loop.run_until_complete(asyncio.gather(*(
+    result = all(loop.run_until_complete(asyncio.gather(*(
         run_ssh('-fNM', host) for host in collect_ssh_hosts()
-    )))
+    ))))
+    if not result:
+        logging.error("connect() failed")
 
 
 def disconnect():
+    logging.info("disconnecting")
     loop.run_until_complete(asyncio.gather(*(
         run_ssh('-O', 'exit', host) for host in collect_ssh_hosts()
     )))
@@ -63,7 +76,7 @@ def disconnect():
     rmtree(base_dir / 'control', ignore_errors=True)
 
 
-def apply_passes(passes: List[Tuple[int, str]]):
+def apply_passes(passes: list[tuple[int, str]]):
     from nattka.bugzilla import NattkaBugzilla, BugCategory, arches_from_cc
     from nattka.package import find_repository, match_package_list, add_keywords
     from nattka.git import GitWorkTree, git_commit
@@ -72,8 +85,8 @@ def apply_passes(passes: List[Tuple[int, str]]):
         nattka_bugzilla = NattkaBugzilla(api_key=api_key)
     else:
         raise ArgumentError(None, "To apply and resolve, set environment variable ARCHTESTER_BUGZILLA_APIKEY")
-    _, repo = find_repository(Path(options.fetch_repo))
-    git_repo = GitWorkTree(Path(options.fetch_repo))
+    _, repo = find_repository(options.fetch_repo)
+    git_repo = GitWorkTree(options.fetch_repo)
 
     divided = {bug_no: frozenset(a for x, a in passes if x == bug_no) for bug_no, _ in passes}
 
@@ -99,7 +112,7 @@ def apply_passes(passes: List[Tuple[int, str]]):
                 if options.fetch_resolve:
                     to_remove = bug_cc if allarches else [arch]
                     all_done = len(bug_cc) == 1 or allarches
-                    to_close = (not bug.security) and all_done
+                    to_close = all_done and not bug.security
                     if allarches:
                         comment = " ".join(f'[{a}]' if a == arch else a for a in to_remove)
                         comment += " (ALLARCHES) done"
@@ -113,43 +126,46 @@ def apply_passes(passes: List[Tuple[int, str]]):
                         comment=comment,
                         resolve=to_close
                     )
+                    logging.info("processed %d,%s", bug_no, arch)
                     for arch in to_remove:
                         bug_cc.remove(arch)
             except Exception as e:
-                print(f'failed to apply for {bug_no},{arch} , err:', e)
+                logging.error("failed to apply for %d,%s", bug_no, arch, exc_info=e)
 
 
 async def handler(socket_file: Path):
     if not socket_file.exists():
-        print(f"No such socket {socket_file}")
+        logging.error("No such socket %s", socket_file)
         return
     try:
         reader, writer = await asyncio.open_unix_connection(path=socket_file)
-    except:
-        print("Failed Connect to", socket_file.name)
+    except Exception as e:
+        logging.error("Failed Connect to %s", socket_file.name, exc_info=e)
         return
 
-    writer.write(messages.dump(messages.Worker(name='', arch='')))
-    if options.bugs:
-        writer.write(messages.dump(messages.GlobalJob(bugs=options.bugs)))
-    if options.scan:
-        writer.write(messages.dump(messages.DoScan()))
-    await writer.drain()
+    try:
+        writer.write(messages.dump(messages.Worker(name='', arch='')))
+        if options.bugs:
+            writer.write(messages.dump(messages.GlobalJob(bugs=options.bugs)))
+        if options.scan:
+            writer.write(messages.dump(messages.DoScan()))
+            logging.info("Initiated scan for %s", socket_file.name)
+        await writer.drain()
 
-    if options.action == 'fetch':
-        now = datetime.utcnow()
-        writer.write(messages.dump(messages.CompletedJobsRequest(since=fetch_datetimes.get(socket_file.name, datetime.fromtimestamp(0)))))
-        await writer.drain()
-        data = messages.load(await reader.readuntil(b'\n'))
-        if isinstance(data, messages.CompletedJobsResponse):
-            for bug_no, arch in data.passes:
-                print(f'{bug_no},{arch}')
-            fetch_bugs_passed.extend(data.passes)
-            fetch_datetimes[socket_file.name] = now
-    elif options.action == 'follower':
-        writer.write(messages.dump(messages.Follower()))
-        await writer.drain()
-        with contextlib.suppress(Exception):
+        if options.action == 'fetch':
+            now = datetime.utcnow()
+            writer.write(messages.dump(messages.CompletedJobsRequest(since=fetch_datetimes.get(socket_file.name, datetime.fromtimestamp(0)))))
+            await writer.drain()
+            data = messages.load(await reader.readuntil(b'\n'))
+            if isinstance(data, messages.CompletedJobsResponse):
+                for bug_no, arch in data.passes:
+                    print(f'{bug_no},{arch}')
+                fetch_bugs_passed.extend(data.passes)
+                fetch_datetimes[socket_file.name] = now
+        elif options.action == 'follower':
+            writer.write(messages.dump(messages.Follower()))
+            await writer.drain()
+
             while True:
                 if data := await reader.readuntil(b'\n'):
                     data = messages.load(data)
@@ -157,12 +173,12 @@ async def handler(socket_file: Path):
                         print(f'[{data.worker.name}]: {data.msg}')
                 else:
                     break
-
+    except Exception as e:
+        logging.error("Failed Connect to %s", socket_file.name, exc_info=e)
+    finally:
+        with contextlib.suppress(Exception):
             writer.close()
             await writer.wait_closed()
-
-    writer.close()
-    await writer.wait_closed()
 
 
 def argv_parser() -> ArgumentParser:
@@ -181,7 +197,7 @@ def argv_parser() -> ArgumentParser:
     follower_parser = subparsers.add_parser('follower')
 
     fetch_parser = subparsers.add_parser('fetch')
-    fetch_parser.add_argument("-d", "--repo", dest="fetch_repo", action="store",
+    fetch_parser.add_argument("-d", "--repo", dest="fetch_repo", action="store", type=Path,
                               help="Repository to work on")
     fetch_parser.add_argument("-n", "--dry-run", dest="fetch_dryrun", action="store_true",
                               help="Apply and commit all passing bugs on repo")
@@ -199,7 +215,7 @@ if options.connect:
 
 if options.action == 'fetch':
     fetch_datetimes = read_fetch_datetimes()
-    fetch_bugs_passed: List[Tuple[int, str]] = []
+    fetch_bugs_passed: list[tuple[int, str]] = []
 
 loop.run_until_complete(asyncio.gather(*map(handler, comm_dir.iterdir())))
 

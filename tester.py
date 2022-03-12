@@ -53,13 +53,14 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
     async with jobs_semaphore:
         proc = await asyncio.create_subprocess_exec(
             'tatt', '-b', str(bug_no), '-j', str(bug_no),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             preexec_fn=os.setpgrp,
             cwd=testing_dir,
         )
-        if 0 != await proc.wait():
-            logging.error('failed with tatt -b %d', bug_no)
+        stdout, _ = await proc.communicate()
+        if proc.returncode != 0:
+            logging.error('failed with tatt -b %d\n%s', bug_no, stdout)
             return 'tatt failed'
 
         await writer(messages.LogMessage(worker, f'Started testing of bug #{bug_no}'))

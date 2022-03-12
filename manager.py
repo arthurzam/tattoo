@@ -9,7 +9,7 @@ import messages
 import bugs_fetcher
 
 import logging
-logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.NOTSET)
+logging.basicConfig(format='{asctime} | [{levelname}] {message}', style='{', level=logging.INFO)
 
 loop = asyncio.get_event_loop()
 workers: Dict[messages.Worker, asyncio.StreamWriter] = {}
@@ -24,6 +24,7 @@ async def do_scan():
             logging.info(f'sent to {worker.name} bugs {bugs}')
             workers[worker].write(messages.dump(messages.GlobalJob(bugs)))
             await workers[worker].drain()
+    logging.info('finished scan for new bugs')
 
 async def auto_scan(interval: int):
     while True:
@@ -94,7 +95,7 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     finally:
         writer.close()
         await writer.wait_closed()
-    
+
     if keepaliver:
         keepaliver.cancel()
     if is_follower:
