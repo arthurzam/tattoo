@@ -3,6 +3,7 @@
 from typing import Any, Callable
 from argparse import ArgumentParser
 from time import sleep
+from pathlib import Path
 import contextlib
 import subprocess
 import asyncio
@@ -17,6 +18,7 @@ import logging
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.NOTSET)
 
 testing_dir = '/tmp/run'
+failure_collection_dir = Path.home() / 'logs/failures'
 
 class IrkerSender(asyncio.DatagramProtocol):
     IRC_CHANNEL = "#gentoo-arthurzam"
@@ -60,7 +62,9 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
         )
         stdout, _ = await proc.communicate()
         if proc.returncode != 0:
-            logging.error('failed with tatt -b %d\n%s', bug_no, stdout)
+            with open(dst_failure := failure_collection_dir / f'{bug_no}.tatt-failure.log', 'w') as f:
+                f.write(stdout)
+            logging.error('failed with `tatt -b %d` - log saved at %s', bug_no, dst_failure)
             return 'tatt failed'
 
         await writer(messages.LogMessage(worker, f'Started testing of bug #{bug_no}'))
@@ -148,8 +152,8 @@ options = parser.parse_args()
 jobs_semaphore = asyncio.Semaphore(options.jobs)
 worker = messages.Worker(name=options.name, arch=options.arch)
 
-if not os.path.exists(testing_dir):
-    os.mkdir(testing_dir)
+os.makedirs(testing_dir, exist_ok=True)
+os.makedirs(failure_collection_dir, exist_ok=True)
 
 asyncio.set_event_loop(loop := asyncio.new_event_loop())
 if os.path.exists(messages.socket_filename):
