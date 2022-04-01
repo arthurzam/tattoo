@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import sys
 from typing import Any, Callable
 from argparse import ArgumentParser
 from time import sleep
@@ -7,7 +8,7 @@ from pathlib import Path
 import contextlib
 import subprocess
 import asyncio
-import socket
+import signal
 import json
 import os
 
@@ -15,10 +16,13 @@ import bugs_fetcher
 import messages
 
 import logging
-logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.NOTSET)
+logging.basicConfig(format='{asctime} | [{levelname}] {message}', style='{', level=logging.INFO)
 
-testing_dir = '/tmp/run'
+testing_dir = Path('/tmp/run')
 failure_collection_dir = Path.home() / 'logs/failures'
+
+# This magic tuple wraps every executable call, to redirect all /dev/tty to stdout
+wrap_tty = (sys.executable, '-c', 'import pty, sys; pty.spawn(sys.argv[1:])')
 
 class IrkerSender(asyncio.DatagramProtocol):
     IRC_CHANNEL = "#gentoo-arthurzam"
@@ -43,63 +47,70 @@ class IrkerSender(asyncio.DatagramProtocol):
         )
 
 
-def collect_zombies():
-    with contextlib.suppress(Exception):
-        while True:
-            cpid, _ = os.waitpid(-1, os.WNOHANG)
-            if cpid == 0:
-                break
+def preexec():
+    signal.signal(signal.SIGCHLD, signal.SIG_DFL)
+    # os.setpgrp()
 
 
 async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
-    async with jobs_semaphore:
-        proc = await asyncio.create_subprocess_exec(
-            'tatt', '-b', str(bug_no), '-j', str(bug_no),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            preexec_fn=os.setpgrp,
-            cwd=testing_dir,
-        )
-        stdout, _ = await proc.communicate()
-        if proc.returncode != 0:
-            with open(dst_failure := failure_collection_dir / f'{bug_no}.tatt-failure.log', 'w') as f:
+    logging.info('testing %d - tatt', bug_no)
+    proc = await asyncio.create_subprocess_exec(
+        *wrap_tty, 'tatt', '-b', str(bug_no), '-j', str(bug_no),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        preexec_fn=preexec,
+        cwd=testing_dir,
+    )
+    stdout, _ = await proc.communicate()
+    if proc.returncode != 0:
+        try:
+            with open(dst_failure := failure_collection_dir / f'{bug_no}.tatt-failure.log', 'wb') as f:
                 f.write(stdout)
             logging.error('failed with `tatt -b %d` - log saved at %s', bug_no, dst_failure)
-            return 'tatt failed'
+        except Exception as exc:
+            logging.error('failed with `tatt -b %d`, but saving log to file failed', exc_info=exc)
+        return 'tatt failed'
 
-        await writer(messages.LogMessage(worker, f'Started testing of bug #{bug_no}'))
-        proc = await asyncio.create_subprocess_exec(
-            f'/tmp/run/{bug_no}-useflags.sh',
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            preexec_fn=os.setpgrp,
-            cwd=testing_dir,
-        )
-        if 0 != await proc.wait():
-            await writer(messages.BugJobDone(bug_number=bug_no, success=False))
-            return 'fail'
-        await writer(messages.BugJobDone(bug_number=bug_no, success=True))
-
+    logging.info('testing %d - test run', bug_no)
+    await writer(messages.LogMessage(worker, f'Started testing of bug #{bug_no}'))
     proc = await asyncio.create_subprocess_exec(
-        f'/tmp/run/{bug_no}-cleanup.sh',
+        *wrap_tty, testing_dir / f'{bug_no}-useflags.sh',
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        preexec_fn=os.setpgrp,
+        preexec_fn=preexec,
+        cwd=testing_dir,
+    )
+    if 0 != await proc.wait():
+        await writer(messages.BugJobDone(bug_number=bug_no, success=False))
+        return 'fail'
+    await writer(messages.BugJobDone(bug_number=bug_no, success=True))
+
+    logging.info('testing %d - cleanup', bug_no)
+    proc = await asyncio.create_subprocess_exec(
+        *wrap_tty, f'/tmp/run/{bug_no}-cleanup.sh',
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        preexec_fn=preexec,
         cwd=testing_dir,
     )
     await proc.wait()
     return ''
 
 
-async def handle_bug_job(writer: Callable[[Any], Any], bug_no: int) -> None:
-    try:
-        result = await test_run(writer, bug_no)
-        collect_zombies()
-        await IrkerSender.send_message(bug_no, result or 'success')
-    except Exception as e:
-        result = f'error: {e}'
-    with contextlib.suppress(Exception):
-        await writer(messages.LogMessage(worker, f'Finished testing of bug #{bug_no} {result}'))
+async def worker_func(queue: asyncio.Queue, writer: Callable[[Any], Any]):
+    with contextlib.suppress(asyncio.CancelledError):
+        while True:
+            bug_no: int = await queue.get()
+            try:
+                result = await test_run(writer, bug_no)
+                await IrkerSender.send_message(bug_no, result or 'success')
+            except asyncio.CancelledError:
+                return
+            except Exception as exc:
+                result = f'error: {exc}'
+            with contextlib.suppress(Exception):
+                await writer(messages.LogMessage(worker, f'Finished testing of bug #{bug_no} {result}'))
+            queue.task_done()
 
 
 async def handler():
@@ -109,36 +120,37 @@ async def handler():
         writer.write(messages.dump(obj))
         return writer.drain()
 
-    writer.write(messages.dump(worker))
-    await writer.drain()
+    await writer_func(worker)
+
+    queue = asyncio.Queue()
+    for i in range(options.jobs):
+        asyncio.create_task(worker_func(queue, writer_func), name=f'Tester {i + 1}')
+
     try:
-        while True:
-            if data := await reader.readuntil(b'\n'):
-                data = messages.load(data)
-                if isinstance(data, messages.GlobalJob):
-                    await writer_func(messages.LogMessage(worker, f'Got job requests {data.bugs}'))
-                    try:
-                        for _, bugs in bugs_fetcher.collect_bugs(data.bugs, worker):
-                            await writer_func(messages.LogMessage(worker, f'Will test {bugs}'))
-                            for bug_no in bugs:
-                                logging.debug(bug_no)
-                                asyncio.ensure_future(handle_bug_job(writer_func, bug_no))
-                    except Exception as e:
-                        logging.error('GlobalJob', exc_info=e)
-                        await writer_func(messages.LogMessage(worker, f'Failed with: {e}'))
-            else:
-                logging.debug('closing')
+        while data := await reader.readuntil(b'\n'):
+            data = messages.load(data)
+            if isinstance(data, messages.GlobalJob):
+                await writer_func(messages.LogMessage(worker, f'Got job requests {data.bugs}'))
+                try:
+                    for _, bugs in bugs_fetcher.collect_bugs(data.bugs, worker):
+                        await writer_func(messages.LogMessage(worker, f'Will test {bugs}'))
+                        for bug_no in bugs:
+                            logging.info('Queuing %d', bug_no)
+                            await queue.put(bug_no)
+                except Exception as exc:
+                    logging.error('Running GlobalJob failed', exc_info=exc)
+                    await writer_func(messages.LogMessage(worker, f'Failed with: {exc}'))
     except asyncio.exceptions.IncompleteReadError:
         logging.warning('IncompleteReadError')
     except ConnectionResetError:
         logging.warning('ConnectionResetError')
-    except Exception as e:
-        logging.error('Unknown', exc_info=e)
+    except Exception as exc:
+        logging.error('Unknown', exc_info=exc)
     finally:
         with contextlib.suppress(Exception):
             writer.close()
             await writer.wait_closed()
-        logging.debug('closing')
+        logging.info('closing')
 
 parser = ArgumentParser()
 parser.add_argument("-n", "--name", dest="name", action="store", required=True,
@@ -149,7 +161,8 @@ parser.add_argument("-j", "--jobs", dest="jobs", type=int, action="store", defau
                     help="Amount of simultaneous testing jobs")
 options = parser.parse_args()
 
-jobs_semaphore = asyncio.Semaphore(options.jobs)
+# signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+
 worker = messages.Worker(name=options.name, arch=options.arch)
 
 os.makedirs(testing_dir, exist_ok=True)
@@ -160,5 +173,8 @@ if os.path.exists(messages.socket_filename):
     for _ in range(5):
         try:
             loop.run_until_complete(handler())
-        except:
+        except KeyboardInterrupt:
+            logging.info('Caught a CTRL + C, good bye')
+            break
+        except Exception:
             sleep(0.5)

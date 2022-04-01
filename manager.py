@@ -11,7 +11,6 @@ import bugs_fetcher
 import logging
 logging.basicConfig(format='{asctime} | [{levelname}] {message}', style='{', level=logging.INFO)
 
-loop = asyncio.get_event_loop()
 workers: Dict[messages.Worker, asyncio.StreamWriter] = {}
 follower: Optional[asyncio.StreamWriter] = None
 
@@ -20,8 +19,8 @@ db = DB()
 async def do_scan():
     logging.info('started scan for new bugs')
     for worker, bugs in bugs_fetcher.collect_bugs([], *workers.keys()):
-        if bugs := list(db.filter_not_tested(worker.canonical_arch(), bugs)):
-            logging.info(f'sent to {worker.name} bugs {bugs}')
+        if bugs := list(db.filter_not_tested(worker.canonical_arch(), frozenset(bugs))):
+            logging.info('sent to %s bugs %s', worker.name, bugs)
             workers[worker].write(messages.dump(messages.GlobalJob(bugs)))
             await workers[worker].drain()
     logging.info('finished scan for new bugs')
@@ -50,9 +49,9 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                 data = await reader.readline()
                 if not data:
                     break
-            except asyncio.exceptions.IncompleteReadError as e:
+            except asyncio.exceptions.IncompleteReadError as exc:
                 logging.info('pos')
-                data = e.partial
+                data = exc.partial
             if data:
                 data = messages.load(data)
                 if isinstance(data, messages.Worker):
@@ -66,9 +65,9 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                     if is_follower := follower is None:
                         follower = writer
                 elif isinstance(data, messages.GlobalJob):
-                    logging.debug(f'got bugs {data.bugs}')
+                    logging.info('got bugs %s', data.bugs)
                     for worker, bugs in bugs_fetcher.collect_bugs(data.bugs, *workers.keys()):
-                        logging.info(f'sent to {worker.name} bugs {bugs}')
+                        logging.info('sent to %s bugs %s', worker.name, bugs)
                         workers[worker].write(messages.dump(messages.GlobalJob(bugs)))
                         await workers[worker].drain()
                 elif isinstance(data, messages.BugJobDone):
@@ -88,8 +87,8 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                         await follower.drain()
 
         logging.warning('[%s] simple close', worker.name)
-    except asyncio.exceptions.IncompleteReadError as e:
-        logging.warning('[%s] IncompleteReadError', worker.name, exc_info=e)
+    except asyncio.exceptions.IncompleteReadError as exc:
+        logging.warning('[%s] IncompleteReadError', worker.name, exc_info=exc)
     except ConnectionResetError:
         logging.warning('[%s] ConnectionResetError', worker.name)
     finally:

@@ -20,7 +20,7 @@ fetch_datetime_file = Path.cwd() / 'controller.datetime.txt'
 
 
 def collect_ssh_hosts() -> Iterator[str]:
-    with open(Path.cwd() / 'ssh_config') as f:
+    with open(Path.cwd() / 'ssh_config', encoding='utf8') as f:
         for row in f:
             if row.startswith('Host '):
                 yield row.removeprefix('Host ').strip()
@@ -50,8 +50,9 @@ async def run_ssh(*extra_args) -> bool:
         if 0 != proc.returncode:
             logging.error("running 'ssh -F ssh_config -T %s' failed with:\n%s", ' '.join(extra_args), stdout.decode('utf8'))
         return 0 == proc.returncode
-    except Exception as e:
-        logging.error("running 'ssh -F ssh_config -T %s' failed", ' '.join(extra_args), exc_info=e)
+    except Exception as exc:
+        logging.error("running 'ssh -F ssh_config -T %s' failed", ' '.join(extra_args), exc_info=exc)
+        return False
 
 
 def connect():
@@ -129,8 +130,8 @@ def apply_passes(passes: list[tuple[int, str]]):
                     logging.info("processed %d,%s", bug_no, arch)
                     for arch in to_remove:
                         bug_cc.remove(arch)
-            except Exception as e:
-                logging.error("failed to apply for %d,%s", bug_no, arch, exc_info=e)
+            except Exception as exc:
+                logging.error("failed to apply for %d,%s", bug_no, arch, exc_info=exc)
 
 
 async def handler(socket_file: Path):
@@ -139,8 +140,8 @@ async def handler(socket_file: Path):
         return
     try:
         reader, writer = await asyncio.open_unix_connection(path=socket_file)
-    except Exception as e:
-        logging.error("Failed Connect to %s", socket_file.name, exc_info=e)
+    except Exception as exc:
+        logging.error("Failed Connect to [%s]", socket_file.name, exc_info=exc)
         return
 
     try:
@@ -149,7 +150,7 @@ async def handler(socket_file: Path):
             writer.write(messages.dump(messages.GlobalJob(bugs=options.bugs)))
         if options.scan:
             writer.write(messages.dump(messages.DoScan()))
-            logging.info("Initiated scan for %s", socket_file.name)
+            logging.info("Initiated scan for [%s]", socket_file.name)
         await writer.drain()
 
         if options.action == 'fetch':
@@ -173,8 +174,8 @@ async def handler(socket_file: Path):
                         print(f'[{data.worker.name}]: {data.msg}')
                 else:
                     break
-    except Exception as e:
-        logging.error("Failed Connect to %s", socket_file.name, exc_info=e)
+    except Exception as exc:
+        logging.error("Failed communicating with socket [%s]", socket_file.name, exc_info=exc)
     finally:
         with contextlib.suppress(Exception):
             writer.close()

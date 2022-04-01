@@ -35,10 +35,11 @@ class GlobalJob(NamedTuple):
 class CompletedJobsRequest(NamedTuple):
     since: datetime
 
+CompletedJobsType = List[Tuple[int, str]]
 
 class CompletedJobsResponse(NamedTuple):
-    passes: List[Tuple[int, str]]
-    failed: List[Tuple[int, str]]
+    passes: CompletedJobsType
+    failed: CompletedJobsType
 
 
 class LogMessage(NamedTuple):
@@ -46,11 +47,11 @@ class LogMessage(NamedTuple):
     msg: str
 
 
-class DoScan():
+class DoScan:
     pass
 
 
-class GetLoad():
+class GetLoad:
     pass
 
 

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Iterator
+from typing import FrozenSet
 import sqlite3
 
 import messages
@@ -29,18 +29,19 @@ class DB():
         """
         with self.conn:
             self.conn.execute(insert_query, (worker.canonical_arch(), worker.name, job.bug_number, int(job.success)))
-    
+
     def get_reportes(self, since: datetime) -> messages.CompletedJobsResponse:
         select_query = """
             SELECT arch, bug_no, state FROM tests WHERE time_date > ? ;
         """
-        passes, failed = [], []
+        passes: messages.CompletedJobsType = []
+        failed: messages.CompletedJobsType = []
         with self.conn:
             for row in self.conn.execute(select_query, (since, )):
                 (passes if row[2] else failed).append((row[1], row[0]))
         return messages.CompletedJobsResponse(passes, failed)
-    
-    def filter_not_tested(self, arch: str, bugs: Iterator[int]) -> Iterator[int]:
+
+    def filter_not_tested(self, arch: str, bugs: FrozenSet[int]) -> FrozenSet[int]:
         bugs = frozenset(bugs)
         select_query = f"""
             SELECT bug_no FROM tests WHERE bug_no in ({','.join(map(str, bugs))}) AND arch = ?;
