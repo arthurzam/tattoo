@@ -1,29 +1,25 @@
 #!/usr/bin/env python
 
-import sys
-from typing import Any, Callable
+from typing import Any, Callable, Tuple
 from argparse import ArgumentParser
 from time import sleep
 from pathlib import Path
 import contextlib
 import subprocess
+import logging
 import asyncio
 import signal
 import json
+import re
 import os
 
 import bugs_fetcher
 import messages
 
-import logging
 logging.basicConfig(format='{asctime} | [{levelname}] {message}', style='{', level=logging.INFO)
 
 testing_dir = Path('/tmp/run')
 failure_collection_dir = Path.home() / 'logs/failures'
-
-# This magic tuple wraps every executable call, to redirect all /dev/tty to stdout
-wrap_tty = (sys.executable, '-c', 'import pty, sys; pty.spawn(sys.argv[1:])')
-
 class IrkerSender(asyncio.DatagramProtocol):
     IRC_CHANNEL = "#gentoo-arthurzam"
 
@@ -49,23 +45,26 @@ class IrkerSender(asyncio.DatagramProtocol):
 
 def preexec():
     signal.signal(signal.SIGCHLD, signal.SIG_DFL)
-    # os.setpgrp()
+    os.setpgrp()
 
 
 async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
     logging.info('testing %d - tatt', bug_no)
     proc = await asyncio.create_subprocess_exec(
-        *wrap_tty, 'tatt', '-b', str(bug_no), '-j', str(bug_no),
+        'tatt', '-b', str(bug_no), '-j', str(bug_no),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         preexec_fn=preexec,
         cwd=testing_dir,
     )
-    stdout, _ = await proc.communicate()
+    try:
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60)
+    except asyncio.TimeoutError:
+        logging.error('`tatt -b %d` timed out', bug_no)
+        return 'tatt timed out'
     if proc.returncode != 0:
         try:
-            with open(dst_failure := failure_collection_dir / f'{bug_no}.tatt-failure.log', 'wb') as f:
-                f.write(stdout)
+            (dst_failure := failure_collection_dir / f'{bug_no}.tatt-failure.log').write_bytes(stdout)
             logging.error('failed with `tatt -b %d` - log saved at %s', bug_no, dst_failure)
         except Exception as exc:
             logging.error('failed with `tatt -b %d`, but saving log to file failed', exc_info=exc)
@@ -74,7 +73,7 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
     logging.info('testing %d - test run', bug_no)
     await writer(messages.LogMessage(worker, f'Started testing of bug #{bug_no}'))
     proc = await asyncio.create_subprocess_exec(
-        *wrap_tty, testing_dir / f'{bug_no}-useflags.sh',
+        testing_dir / f'{bug_no}-useflags.sh',
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         preexec_fn=preexec,
@@ -87,7 +86,7 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
 
     logging.info('testing %d - cleanup', bug_no)
     proc = await asyncio.create_subprocess_exec(
-        *wrap_tty, f'/tmp/run/{bug_no}-cleanup.sh',
+        f'/tmp/run/{bug_no}-cleanup.sh',
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         preexec_fn=preexec,

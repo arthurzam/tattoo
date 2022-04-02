@@ -1,5 +1,5 @@
 from typing import Iterator, List, Tuple
-from nattka.bugzilla import *
+from nattka.bugzilla import BugCategory, BugInfo, NattkaBugzilla
 
 import messages
 
@@ -14,7 +14,7 @@ def is_ready(bug: BugInfo) -> bool:
             return False
     return True
 
-def collect_bugs(bugs_no: Iterator[int], *workers: Iterator[messages.Worker]) -> Iterator[Tuple[messages.Worker, List[int]]]:
+def collect_bugs(bugs_no: Iterator[int], *workers: messages.Worker) -> Iterator[Tuple[messages.Worker, List[int]]]:
     bugs = nattka_bugzilla.find_bugs(
         bugs=bugs_no,
         unresolved=True,
