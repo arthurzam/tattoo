@@ -1,0 +1,12 @@
+#!/bin/bash
+pushd @@REPODIR@@ > /dev/null
+
+if [ "@@NEWKEYWORD@@" = "@@ARCH@@" ]; then
+	DESCR="@@ARCH@@ stable"
+else
+	DESCR="@@ARCH@@ keyworded"
+fi
+
+if [ -n "@@BUG@@" ]; then
+	DESCR="${DESCR} (bug #@@BUG@@)"
+fi

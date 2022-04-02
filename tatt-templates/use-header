@@ -1,0 +1,17 @@
+#!/bin/bash
+#USE-Flag build tests for job @@JOB@@
+
+trap "echo 'signal captured, exiting the entire script...'; exit" SIGHUP SIGINT SIGTERM
+
+export TATT_TEST_TYPE="use"
+export TATT_REPORTFILE="@@REPORTFILE@@"
+export TATT_BUILDLOGDIR="@@BUILDLOGDIR@@"
+export TATT_EMERGEOPTS="@@EMERGEOPTS@@"
+
+source "@@TEMPLATEDIR@@tatt_functions.sh"
+
+if [[ ! -f @@REPORTFILE@@ ]]; then
+    echo -e '{\n\t"bug": "@@BUG@@",\n\t"runs": [' > @@REPORTFILE@@
+fi
+
+test_ret=0

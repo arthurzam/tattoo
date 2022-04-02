@@ -1,0 +1,5 @@
+pushd @@CP@@ > /dev/null
+
+ekeyword @@NEWKEYWORD@@ @@EBUILD@@
+
+popd > /dev/null

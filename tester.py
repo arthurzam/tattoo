@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, Iterator
 from argparse import ArgumentParser
 from time import sleep
 from pathlib import Path
@@ -10,7 +10,6 @@ import logging
 import asyncio
 import signal
 import json
-import re
 import os
 
 import bugs_fetcher
@@ -41,6 +40,25 @@ class IrkerSender(asyncio.DatagramProtocol):
             lambda: IrkerSender(bugno, msg),
             remote_addr=("127.0.0.1", 6659)
         )
+
+
+def parse_report_file(report_file: Path) -> Iterator[str]:
+    try:
+        report = json.loads(report_file.read_text(encoding='utf8').strip()[:-1] + ']}')
+    except json.JSONDecodeError:
+        yield 'JSON decoding failed'
+        return
+    for run in report['runs']:
+        if not run['result']:
+            atom = run['atom']
+            if failure_str := run.get('failure_str', None):
+                yield f'   {atom} special fail: {failure_str}'
+            elif 'test' in run['features']:
+                yield f'   {atom} test run failed'
+            elif useflags := run['useflags']:
+                yield f'   {atom} USE flag run failed: [{useflags.strip()}]'
+            else:
+                yield f'   {atom} default USE failed'
 
 
 def preexec():
@@ -81,7 +99,7 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
     )
     if 0 != await proc.wait():
         await writer(messages.BugJobDone(bug_number=bug_no, success=False))
-        return 'fail'
+        return 'fail\n' + '\n'.join(parse_report_file(testing_dir / f'{bug_no}.report'))
     await writer(messages.BugJobDone(bug_number=bug_no, success=True))
 
     logging.info('testing %d - cleanup', bug_no)
