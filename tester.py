@@ -83,6 +83,9 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
         return 'tatt timed out'
     if proc.returncode != 0:
         try:
+            if b'request due to maintenance downtime or capacity' in stdout:
+                logging.error('failed with `tatt -b %d` - bugzilla rate limit', bug_no)
+                return 'tatt failed with bugzilla rate'
             (dst_failure := failure_collection_dir / f'{bug_no}.tatt-failure.log').write_bytes(stdout)
             logging.error('failed with `tatt -b %d` - log saved at %s', bug_no, dst_failure)
         except Exception as exc:
