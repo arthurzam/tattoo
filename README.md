@@ -37,7 +37,7 @@ was kind enough to decide on the name "tattoo", which came from combining
 2. Make sure the working directory of the machine manager is mount bound into
     the container. The mount destination inside the container would be the
     working directory for the testing container.
-3. Create a corresponding `~/.tatt` file inside container, for example (*IMPORTANT*: replace ARCH)
+3. Create a corresponding `~/.tatt` file inside container, for example (*IMPORTANT*: replace ARCH, and set templates directory pointing to tattoo's tatt templates)
     ```
     arch=arm64
     emergeopts="--autounmask --autounmask-continue --autounmask-write"
@@ -46,7 +46,9 @@ was kind enough to decide on the name "tattoo", which came from combining
     buildlogdir=/root/logs
     rdeps=0
     usecombis=1
+    template-dir=/root/tattoo/tatt-templates
     ```
+    The special tatt templates are used for creating machine readable report files, which tattoo can parse and send more specific error messages.
 
 # Running and using
 
