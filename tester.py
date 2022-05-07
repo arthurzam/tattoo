@@ -141,8 +141,7 @@ async def handler():
     await writer_func(worker)
 
     queue = asyncio.Queue()
-    for i in range(options.jobs):
-        asyncio.create_task(worker_func(queue, writer_func), name=f'Tester {i + 1}')
+    tasks = [asyncio.create_task(worker_func(queue, writer_func), name=f'Tester {i + 1}') for i in range(options.jobs)]
 
     try:
         while data := await reader.readuntil(b'\n'):
@@ -169,7 +168,10 @@ async def handler():
         with contextlib.suppress(Exception):
             writer.close()
             await writer.wait_closed()
+        for task in tasks:
+            task.cancel()
         logging.info('closing')
+
 
 parser = ArgumentParser()
 parser.add_argument("-n", "--name", dest="name", action="store", required=True,
