@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from random import shuffle
 from typing import Any, Callable, Iterator
 from argparse import ArgumentParser
 from time import sleep
@@ -151,6 +152,7 @@ async def handler():
                 try:
                     for _, bugs in bugs_fetcher.collect_bugs(data.bugs, worker):
                         await writer_func(messages.LogMessage(worker, f'Will test {bugs}'))
+                        shuffle(bugs)
                         for bug_no in bugs:
                             logging.info('Queuing %d', bug_no)
                             await queue.put(bug_no)

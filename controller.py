@@ -128,8 +128,8 @@ def apply_passes(passes: list[tuple[int, str]]):
                         resolve=to_close
                     )
                     logging.info("processed %d,%s", bug_no, arch)
-                    for arch in to_remove:
-                        bug_cc.remove(arch)
+                    for a in to_remove:
+                        bug_cc.remove(a)
             except Exception as exc:
                 logging.error("failed to apply for %d,%s", bug_no, arch, exc_info=exc)
 
