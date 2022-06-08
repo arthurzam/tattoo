@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from time import sleep
 from typing import Dict, Optional
 import asyncio
 import os
@@ -7,6 +8,7 @@ import os
 from db import DB
 import messages
 import bugs_fetcher
+from sdnotify import sdnotify
 
 import logging
 logging.basicConfig(format='{asctime} | [{levelname}] {message}', style='{', level=logging.INFO)
@@ -105,13 +107,18 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
 
 
 def main():
-    if os.path.exists(messages.socket_filename):
-        os.remove(messages.socket_filename)
-    asyncio.set_event_loop(loop := asyncio.new_event_loop())
-    loop.run_until_complete(asyncio.start_unix_server(handler, path=messages.socket_filename))
-    os.chmod(messages.socket_filename, 0o666)
-    # asyncio.ensure_future(auto_scan(3600))
-    loop.run_forever()
+    try:
+        if os.path.exists(messages.socket_filename):
+            os.remove(messages.socket_filename)
+        asyncio.set_event_loop(loop := asyncio.new_event_loop())
+        loop.run_until_complete(asyncio.start_unix_server(handler, path=messages.socket_filename))
+        os.chmod(messages.socket_filename, 0o666)
+        sdnotify('READY=1')
+        # asyncio.ensure_future(auto_scan(3600))
+        loop.run_forever()
+    except KeyboardInterrupt:
+        logging.info('Caught a CTRL + C, good bye')
+        sdnotify('STOPPING=1')
 
 if __name__ == '__main__':
     main()
