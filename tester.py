@@ -15,6 +15,7 @@ import os
 
 import bugs_fetcher
 import messages
+from sdnotify import sdnotify
 
 logging.basicConfig(format='{asctime} | [{levelname}] {message}', style='{', level=logging.INFO)
 
@@ -146,6 +147,8 @@ async def handler():
     queue = asyncio.Queue()
     tasks = [asyncio.create_task(worker_func(queue, writer_func), name=f'Tester {i + 1}') for i in range(options.jobs)]
 
+    sdnotify('READY=1')
+
     try:
         while data := await reader.readuntil(b'\n'):
             data = messages.load(data)
@@ -199,6 +202,8 @@ if os.path.exists(messages.socket_filename):
             loop.run_until_complete(handler())
         except KeyboardInterrupt:
             logging.info('Caught a CTRL + C, good bye')
+            sdnotify('STOPPING=1')
             break
         except Exception:
             sleep(0.5)
+        sdnotify('RELOADING=1')

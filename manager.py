@@ -88,7 +88,8 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                         follower.write(messages.dump(data))
                         await follower.drain()
 
-        logging.warning('[%s] simple close', worker.name)
+        if worker.name:
+            logging.warning('[%s] simple close', worker.name)
     except asyncio.exceptions.IncompleteReadError as exc:
         logging.warning('[%s] IncompleteReadError', worker.name, exc_info=exc)
     except ConnectionResetError:
