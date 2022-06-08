@@ -21,7 +21,7 @@ logging.basicConfig(format='{asctime} | [{levelname}] {message}', style='{', lev
 testing_dir = Path('/tmp/run')
 failure_collection_dir = Path.home() / 'logs/failures'
 class IrkerSender(asyncio.DatagramProtocol):
-    IRC_CHANNEL = "#gentoo-arthurzam"
+    IRC_CHANNEL = "#gentoo-tattoo"
 
     def __init__(self, bugno: int, msg: str):
         irker_spigot = f"ircs://irc.libera.chat:6697/{IrkerSender.IRC_CHANNEL}"
