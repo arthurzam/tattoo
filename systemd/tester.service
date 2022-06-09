@@ -1,0 +1,10 @@
+# /etc/systemd/system/tattoo.service
+[Unit]
+Description=tattoo tester for [worker-name]
+
+[Service]
+Type=notify
+WorkingDirectory=/srv/tattoo
+ExecStart=/usr/bin/python /srv/tattoo/tester.py -n [worker-name] -a [arch] -j [jobs]
+SyslogIdentifier=tattoo
+KillMode=mixed

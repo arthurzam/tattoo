@@ -1,0 +1,11 @@
+# /etc/systemd/system/tattoo.service
+[Unit]
+Description=tattoo's main manager
+Wants=irkerd.service
+After=irkerd.service
+
+[Service]
+Type=notify
+WorkingDirectory=/srv/tattoo
+ExecStart=/usr/bin/python /srv/tattoo/manager.py
+SyslogIdentifier=tattoo

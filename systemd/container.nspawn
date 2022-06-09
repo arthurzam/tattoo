@@ -1,0 +1,16 @@
+[Exec]
+PrivateUsers=no
+Hostname=[worker-name]
+LinkJournal=no
+Capability=CAP_NET_ADMIN
+KillSignal=SIGTERM
+
+[Files]
+BindReadOnly=/var/db/repos/gentoo
+Bind=/var/cache/distfiles/
+Bind=/srv/tattoo
+BindReadOnly=/usr/src
+#TemporaryFileSystem=/var/tmp
+
+[Network]
+Private=no
