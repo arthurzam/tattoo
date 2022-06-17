@@ -20,8 +20,8 @@ fetch_datetime_file = Path.cwd() / 'controller.datetime.txt'
 
 
 def collect_ssh_hosts() -> Iterator[str]:
-    with open(Path.cwd() / 'ssh_config', encoding='utf8') as f:
-        for row in f:
+    with open(Path.cwd() / 'ssh_config', encoding='utf8') as file:
+        for row in file:
             if row.startswith('Host '):
                 yield row.removeprefix('Host ').strip()
 
@@ -55,23 +55,23 @@ async def run_ssh(*extra_args) -> bool:
         return False
 
 
-def connect():
+async def connect():
     os.makedirs(comm_dir, exist_ok=True)
     for existing in comm_dir.iterdir():
         existing.unlink()
     os.makedirs(base_dir / 'control', exist_ok=True)
-    result = all(loop.run_until_complete(asyncio.gather(*(
+    result = await asyncio.gather(*(
         run_ssh('-fNM', host) for host in collect_ssh_hosts()
-    ))))
-    if not result:
+    ))
+    if not all(result):
         logging.error("connect() failed")
 
 
-def disconnect():
+async def disconnect():
     logging.info("disconnecting")
-    loop.run_until_complete(asyncio.gather(*(
+    await asyncio.gather(*(
         run_ssh('-O', 'exit', host) for host in collect_ssh_hosts()
-    )))
+    ))
     from shutil import rmtree
     rmtree(comm_dir, ignore_errors=True)
     rmtree(base_dir / 'control', ignore_errors=True)
@@ -86,8 +86,8 @@ def apply_passes(passes: list[tuple[int, str]]):
         nattka_bugzilla = NattkaBugzilla(api_key=api_key)
     else:
         raise ArgumentError(None, "To apply and resolve, set environment variable ARCHTESTER_BUGZILLA_APIKEY")
-    _, repo = find_repository(options.fetch_repo)
-    git_repo = GitWorkTree(options.fetch_repo)
+    _, repo = find_repository(OPTIONS.fetch_repo)
+    git_repo = GitWorkTree(OPTIONS.fetch_repo)
 
     divided = {bug_no: frozenset(a for x, a in passes if x == bug_no) for bug_no, _ in passes}
 
@@ -110,7 +110,7 @@ def apply_passes(passes: list[tuple[int, str]]):
                     kws = 'ALLARCHES' if allarches else arch
                     msg = f'{pfx}: {act} {pkg.fullver} {kws}, #{bug_no}'
                     print(git_commit(git_repo.path, msg, [str(ebuild_path)]))
-                if options.fetch_resolve:
+                if OPTIONS.fetch_resolve:
                     to_remove = bug_cc if allarches else [arch]
                     all_done = len(bug_cc) == 1 or allarches
                     to_close = all_done and not bug.security
@@ -146,14 +146,14 @@ async def handler(socket_file: Path):
 
     try:
         writer.write(messages.dump(messages.Worker(name='', arch='')))
-        if options.bugs:
-            writer.write(messages.dump(messages.GlobalJob(bugs=options.bugs)))
-        if options.scan:
+        if OPTIONS.bugs:
+            writer.write(messages.dump(messages.GlobalJob(bugs=OPTIONS.bugs)))
+        if OPTIONS.scan:
             writer.write(messages.dump(messages.DoScan()))
             logging.info("Initiated scan for [%s]", socket_file.name)
         await writer.drain()
 
-        if options.action == 'fetch':
+        if OPTIONS.action == 'fetch':
             now = datetime.utcnow()
             writer.write(messages.dump(messages.CompletedJobsRequest(since=fetch_datetimes.get(socket_file.name, datetime.fromtimestamp(0)))))
             await writer.drain()
@@ -163,7 +163,7 @@ async def handler(socket_file: Path):
                     print(f'{bug_no},{arch}')
                 fetch_bugs_passed.extend(data.passes)
                 fetch_datetimes[socket_file.name] = now
-        elif options.action == 'follower':
+        elif OPTIONS.action == 'follower':
             writer.write(messages.dump(messages.Follower()))
             await writer.drain()
 
@@ -195,7 +195,7 @@ def argv_parser() -> ArgumentParser:
 
     subparsers = parser.add_subparsers(title='actions', dest='action')
 
-    follower_parser = subparsers.add_parser('follower')
+    subparsers.add_parser('follower')
 
     fetch_parser = subparsers.add_parser('fetch')
     fetch_parser.add_argument("-d", "--repo", dest="fetch_repo", action="store", type=Path,
@@ -208,23 +208,29 @@ def argv_parser() -> ArgumentParser:
                               help="Resolve all passing bugs on repo")
     return parser
 
-options = argv_parser().parse_args()
-asyncio.set_event_loop(loop := asyncio.new_event_loop())
 
-if options.connect:
-    connect()
+OPTIONS = None
+fetch_datetimes = read_fetch_datetimes()
+fetch_bugs_passed: list[tuple[int, str]] = []
 
-if options.action == 'fetch':
-    fetch_datetimes = read_fetch_datetimes()
-    fetch_bugs_passed: list[tuple[int, str]] = []
 
-loop.run_until_complete(asyncio.gather(*map(handler, comm_dir.iterdir())))
+async def main():
+    global OPTIONS
+    OPTIONS = argv_parser().parse_args()
 
-if options.action == 'fetch' and not options.fetch_dryrun:
-    if fetch_bugs_passed and options.fetch_apply and options.fetch_repo:
-        apply_passes(fetch_bugs_passed)
-    with fetch_datetime_file.open('w') as f:
-        f.writelines((f'{host}={date.isoformat()}\n' for host, date in fetch_datetimes.items()))
+    if OPTIONS.connect:
+        await connect()
 
-if options.disconnect:
-    disconnect()
+    await asyncio.gather(*map(handler, comm_dir.iterdir()))
+
+    if OPTIONS.action == 'fetch' and not OPTIONS.fetch_dryrun:
+        if fetch_bugs_passed and OPTIONS.fetch_apply and OPTIONS.fetch_repo:
+            apply_passes(fetch_bugs_passed)
+        with fetch_datetime_file.open('w') as f:
+            f.writelines((f'{host}={date.isoformat()}\n' for host, date in fetch_datetimes.items()))
+
+    if OPTIONS.disconnect:
+        await disconnect()
+
+if __name__ == '__main__':
+    asyncio.run(main())
