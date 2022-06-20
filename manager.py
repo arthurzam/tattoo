@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from typing import Dict, Optional
+from typing import Dict
 import asyncio
 import os
 
@@ -13,7 +13,6 @@ import logging
 set_logging_format()
 
 workers: Dict[messages.Worker, asyncio.StreamWriter] = {}
-follower: Optional[asyncio.StreamWriter] = None
 
 db = DB()
 
@@ -42,7 +41,6 @@ async def periodic_keepalive(writer: asyncio.StreamWriter):
 
 async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     worker = messages.Worker(name='', arch='')
-    is_follower = False
     keepaliver = None
     try:
         while True:
@@ -61,10 +59,6 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                         workers[data] = writer
                         logging.info('%s of %s connected', worker.name, worker.arch)
                         keepaliver = asyncio.ensure_future(periodic_keepalive(writer))
-                elif isinstance(data, messages.Follower):
-                    global follower
-                    if is_follower := follower is None:
-                        follower = writer
                 elif isinstance(data, messages.GlobalJob):
                     logging.info('got bugs %s', data.bugs)
                     for worker, bugs in bugs_fetcher.collect_bugs(data.bugs, *workers.keys()):
@@ -82,10 +76,6 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                 elif isinstance(data, messages.GetLoad):
                     writer.write(messages.dump(messages.LoadResponse(*os.getloadavg())))
                     await writer.drain()
-                elif isinstance(data, messages.LogMessage):
-                    if follower:
-                        follower.write(messages.dump(data))
-                        await follower.drain()
 
         if worker.name:
             logging.warning('[%s] simple close', worker.name)
@@ -99,8 +89,6 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
 
     if keepaliver:
         keepaliver.cancel()
-    if is_follower:
-        follower = None
     if worker.name:
         logging.warning('[%s] we lost', worker.name)
     workers.pop(worker, None)

@@ -15,10 +15,6 @@ class Worker(NamedTuple):
         return self.arch.startswith('~')
 
 
-class Follower():
-    pass
-
-
 class BugJob(NamedTuple):
     bug_number: int
 
@@ -40,11 +36,6 @@ CompletedJobsType = List[Tuple[int, str]]
 class CompletedJobsResponse(NamedTuple):
     passes: CompletedJobsType
     failed: CompletedJobsType
-
-
-class LogMessage(NamedTuple):
-    worker: Worker
-    msg: str
 
 
 class DoScan:

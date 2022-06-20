@@ -160,20 +160,9 @@ async def handler(socket_file: Path):
             data = messages.load(await reader.readuntil(b'\n'))
             if isinstance(data, messages.CompletedJobsResponse):
                 for bug_no, arch in data.passes:
-                    print(f'{bug_no},{arch}')
+                    logging.info("test pass %d,%s", bug_no, arch)
                 fetch_bugs_passed.extend(data.passes)
                 fetch_datetimes[socket_file.name] = now
-        elif OPTIONS.action == 'follower':
-            writer.write(messages.dump(messages.Follower()))
-            await writer.drain()
-
-            while True:
-                if data := await reader.readuntil(b'\n'):
-                    data = messages.load(data)
-                    if isinstance(data, messages.LogMessage):
-                        print(f'[{data.worker.name}]: {data.msg}')
-                else:
-                    break
     except Exception as exc:
         logging.error("Failed communicating with socket [%s]", socket_file.name, exc_info=exc)
     finally:
@@ -194,8 +183,6 @@ def argv_parser() -> ArgumentParser:
                         help="Bugs to test")
 
     subparsers = parser.add_subparsers(title='actions', dest='action')
-
-    subparsers.add_parser('follower')
 
     fetch_parser = subparsers.add_parser('fetch')
     fetch_parser.add_argument("-d", "--repo", dest="fetch_repo", action="store", type=Path,

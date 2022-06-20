@@ -94,7 +94,6 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
         return 'tatt failed'
 
     logging.info('testing %d - test run', bug_no)
-    await writer(messages.LogMessage(worker, f'Started testing of bug #{bug_no}'))
     proc = await asyncio.create_subprocess_exec(
         testing_dir / f'{bug_no}-useflags.sh',
         stdout=subprocess.DEVNULL,
@@ -130,8 +129,6 @@ async def worker_func(queue: asyncio.Queue, writer: Callable[[Any], Any]):
                 return
             except Exception as exc:
                 result = f'error: {exc}'
-            with contextlib.suppress(Exception):
-                await writer(messages.LogMessage(worker, f'Finished testing of bug #{bug_no} {result}'))
             queue.task_done()
 
 
@@ -152,17 +149,14 @@ async def handler():
         while data := await reader.readuntil(b'\n'):
             data = messages.load(data)
             if isinstance(data, messages.GlobalJob):
-                await writer_func(messages.LogMessage(worker, f'Got job requests {data.bugs}'))
                 try:
                     for _, bugs in bugs_fetcher.collect_bugs(data.bugs, worker):
-                        await writer_func(messages.LogMessage(worker, f'Will test {bugs}'))
                         shuffle(bugs)
                         for bug_no in bugs:
                             logging.info('Queuing %d', bug_no)
                             await queue.put(bug_no)
                 except Exception as exc:
                     logging.error('Running GlobalJob failed', exc_info=exc)
-                    await writer_func(messages.LogMessage(worker, f'Failed with: {exc}'))
     except asyncio.exceptions.IncompleteReadError:
         logging.warning('Abrupt connection closed')
     except ConnectionResetError:

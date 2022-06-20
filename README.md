@@ -37,7 +37,9 @@ was kind enough to decide on the name "tattoo", which came from combining
 2. Make sure the working directory of the machine manager is mount bound into
     the container. The mount destination inside the container would be the
     working directory for the testing container.
-3. Create a corresponding `~/.tatt` file inside container, for example (*IMPORTANT*: replace ARCH, and set templates directory pointing to tattoo's tatt templates)
+3. Create a corresponding `~/.tatt` file inside container, for example
+   (*IMPORTANT*: replace ARCH, and set templates directory pointing to tattoo's
+   tatt templates)
     ```
     arch=arm64
     emergeopts="--autounmask --autounmask-continue --autounmask-write"
@@ -48,7 +50,8 @@ was kind enough to decide on the name "tattoo", which came from combining
     usecombis=1
     template-dir=/root/tattoo/tatt-templates
     ```
-    The special tatt templates are used for creating machine readable report files, which tattoo can parse and send more specific error messages.
+    The special tatt templates are used for creating machine readable report
+    files, which tattoo can parse and send more specific error messages.
 
 # Running and using
 
@@ -75,15 +78,13 @@ was kind enough to decide on the name "tattoo", which came from combining
     Various sockets are created inside `/tmp/tattoo/` directory
 2. Send specific bugs using `./controller.py -b {NUM} {NUM} ...` or initiate
     full scan for open bugs per arch using `./controller.py -s`
-3. You can use "follower" mode to get live logs from all machines and testers
-    using `./controller.py follower`
-4. When bugs are ready, use `./controller.py fetch -n` to view all done bugs,
+3. When bugs are ready, use `./controller.py fetch -n` to view all done bugs,
     but in dry-run mode (no update for bugzilla, and no update last-seen bugs).
     Btw, the output corresponds to sam's `at-commit` script.
-5. When ready to apply, run `./controller.py fetch -ar -d [REPO]` where `REPO`
+4. When ready to apply, run `./controller.py fetch -ar -d [REPO]` where `REPO`
     is the ::gentoo repo to apply on it the commits. This command also un-CC
     and closes bugs for what passed. After success, it saves in small file the
     last seen bugs, so you don't try to reapply them.
-6. From `REPO` push the commits (if you are unlucky, `git pull --rebase` before)
-7. Send, fetch, apply how much you want
+5. From `REPO` push the commits (if you are unlucky, `git pull --rebase` before)
+6. Send, fetch, apply how much you want
 7. Disconnect from all using `./controller.py -d`
