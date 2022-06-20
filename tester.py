@@ -15,9 +15,9 @@ import os
 
 import bugs_fetcher
 import messages
-from sdnotify import sdnotify
+from sdnotify import sdnotify, set_logging_format
 
-logging.basicConfig(format='{asctime} | [{levelname}] {message}', style='{', level=logging.INFO)
+set_logging_format()
 
 testing_dir = Path('/tmp/run')
 failure_collection_dir = Path.home() / 'logs/failures'
@@ -34,7 +34,7 @@ class IrkerSender(asyncio.DatagramProtocol):
         transport.close()
 
     def error_received(self, exc):
-        logging.error('send to irker failed', exc_info=exc)
+        logging.error("send to irker failed", exc_info=exc)
 
     @staticmethod
     async def send_message(bugno: int, msg: str):
@@ -136,7 +136,7 @@ async def worker_func(queue: asyncio.Queue, writer: Callable[[Any], Any]):
 
 
 async def handler():
-    logging.info('connecting')
+    logging.info('connecting to manager')
     reader, writer = await asyncio.open_unix_connection(path=messages.socket_filename)
     def writer_func(obj: Any):
         writer.write(messages.dump(obj))

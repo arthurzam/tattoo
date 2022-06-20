@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from time import sleep
 from typing import Dict, Optional
 import asyncio
 import os
@@ -8,10 +7,10 @@ import os
 from db import DB
 import messages
 import bugs_fetcher
-from sdnotify import sdnotify
+from sdnotify import sdnotify, set_logging_format
 
 import logging
-logging.basicConfig(format='{asctime} | [{levelname}] {message}', style='{', level=logging.INFO)
+set_logging_format()
 
 workers: Dict[messages.Worker, asyncio.StreamWriter] = {}
 follower: Optional[asyncio.StreamWriter] = None
