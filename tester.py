@@ -136,7 +136,6 @@ async def worker_func(queue: asyncio.Queue, writer: Callable[[Any], Any]):
 
 
 async def handler():
-    logging.info('connecting to manager')
     reader, writer = await asyncio.open_unix_connection(path=messages.socket_filename)
     def writer_func(obj: Any):
         writer.write(messages.dump(obj))
@@ -165,11 +164,11 @@ async def handler():
                     logging.error('Running GlobalJob failed', exc_info=exc)
                     await writer_func(messages.LogMessage(worker, f'Failed with: {exc}'))
     except asyncio.exceptions.IncompleteReadError:
-        logging.warning('IncompleteReadError')
+        logging.warning('Abrupt connection closed')
     except ConnectionResetError:
-        logging.warning('ConnectionResetError')
+        logging.warning('Abrupt connection reset')
     except Exception as exc:
-        logging.error('Unknown', exc_info=exc)
+        logging.error('General exception', exc_info=exc)
     finally:
         with contextlib.suppress(Exception):
             writer.close()
@@ -177,6 +176,23 @@ async def handler():
         for task in tasks:
             task.cancel()
         logging.info('closing')
+
+
+def main():
+    asyncio.set_event_loop(loop := asyncio.new_event_loop())
+    retry_counter = 0
+    while retry_counter < 5:
+        try:
+            logging.info('connecting to manager')
+            loop.run_until_complete(handler())
+            retry_counter = 0
+        except KeyboardInterrupt:
+            logging.info('Caught a CTRL + C, good bye')
+            return
+        except Exception:
+            sleep(0.5)
+            retry_counter += 1
+        sdnotify('RELOADING=1')
 
 
 parser = ArgumentParser()
@@ -195,15 +211,6 @@ worker = messages.Worker(name=options.name, arch=options.arch)
 os.makedirs(testing_dir, exist_ok=True)
 os.makedirs(failure_collection_dir, exist_ok=True)
 
-asyncio.set_event_loop(loop := asyncio.new_event_loop())
 if os.path.exists(messages.socket_filename):
-    for _ in range(5):
-        try:
-            loop.run_until_complete(handler())
-        except KeyboardInterrupt:
-            logging.info('Caught a CTRL + C, good bye')
-            sdnotify('STOPPING=1')
-            break
-        except Exception:
-            sleep(0.5)
-        sdnotify('RELOADING=1')
+    main()
+    sdnotify('STOPPING=1')
