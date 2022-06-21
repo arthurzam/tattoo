@@ -149,8 +149,9 @@ async def handler(socket_file: Path):
         if OPTIONS.bugs:
             writer.write(messages.dump(messages.GlobalJob(bugs=OPTIONS.bugs)))
         if OPTIONS.scan:
-            writer.write(messages.dump(messages.DoScan()))
-            logging.info("Initiated scan for [%s]", socket_file.name)
+            if OPTIONS.scan == '*' or socket_file.name in OPTIONS.scan.split(','):
+                writer.write(messages.dump(messages.DoScan()))
+                logging.info("Initiated scan for [%s]", socket_file.name)
         await writer.drain()
 
         if OPTIONS.action == 'fetch':
@@ -177,8 +178,8 @@ def argv_parser() -> ArgumentParser:
                         help="Connect to all remote managers at start using ssh_config file")
     parser.add_argument("-d", "--disconnect", dest="disconnect", action="store_true",
                         help="Disconnect from all remove managers at end")
-    parser.add_argument("-s", "--scan", dest="scan", action="store_true",
-                        help="Run scan for bugs on remote managers")
+    parser.add_argument("-s", "--scan", dest="scan", action="store", const='*', nargs='?',
+                        help="Run scan for bugs on remote managers (optional comma delimited host list)")
     parser.add_argument("-b", "--bugs", dest="bugs", nargs='*', type=int,
                         help="Bugs to test")
 
