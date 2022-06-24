@@ -93,29 +93,30 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
             logging.error('failed with `tatt -b %d`, but saving log to file failed', exc_info=exc)
         return 'tatt failed'
 
-    logging.info('testing %d - test run', bug_no)
-    proc = await asyncio.create_subprocess_exec(
-        testing_dir / f'{bug_no}-useflags.sh',
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        preexec_fn=preexec,
-        cwd=testing_dir,
-    )
-    if 0 != await proc.wait():
-        await writer(messages.BugJobDone(bug_number=bug_no, success=False))
-        return 'fail\n' + '\n'.join(parse_report_file(testing_dir / f'{bug_no}.report'))
-    await writer(messages.BugJobDone(bug_number=bug_no, success=True))
-
-    logging.info('testing %d - cleanup', bug_no)
-    proc = await asyncio.create_subprocess_exec(
-        f'/tmp/run/{bug_no}-cleanup.sh',
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        preexec_fn=preexec,
-        cwd=testing_dir,
-    )
-    await proc.wait()
-    return ''
+    try:
+        logging.info('testing %d - test run', bug_no)
+        proc = await asyncio.create_subprocess_exec(
+            testing_dir / f'{bug_no}-useflags.sh',
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            preexec_fn=preexec,
+            cwd=testing_dir,
+        )
+        if 0 != await proc.wait():
+            await writer(messages.BugJobDone(bug_number=bug_no, success=False))
+            return 'fail\n' + '\n'.join(parse_report_file(testing_dir / f'{bug_no}.report'))
+        await writer(messages.BugJobDone(bug_number=bug_no, success=True))
+        return ''
+    finally:
+        logging.info('testing %d - cleanup', bug_no)
+        proc = await asyncio.create_subprocess_exec(
+            f'/tmp/run/{bug_no}-cleanup.sh',
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            preexec_fn=preexec,
+            cwd=testing_dir,
+        )
+        await proc.wait()
 
 
 async def worker_func(queue: asyncio.Queue, writer: Callable[[Any], Any]):
