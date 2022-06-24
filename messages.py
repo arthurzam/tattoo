@@ -1,4 +1,4 @@
-from typing import NamedTuple, Tuple, List
+from typing import NamedTuple
 from datetime import datetime
 import pickle
 import base64
@@ -25,13 +25,13 @@ class BugJobDone(NamedTuple):
 
 
 class GlobalJob(NamedTuple):
-    bugs: List[int]
+    bugs: list[int]
 
 
 class CompletedJobsRequest(NamedTuple):
     since: datetime
 
-CompletedJobsType = List[Tuple[int, str]]
+CompletedJobsType = list[tuple[int, str]]
 
 class CompletedJobsResponse(NamedTuple):
     passes: CompletedJobsType

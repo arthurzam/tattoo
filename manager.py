@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from typing import Dict
 import asyncio
 import os
 
@@ -12,7 +11,7 @@ from sdnotify import sdnotify, set_logging_format
 import logging
 set_logging_format()
 
-workers: Dict[messages.Worker, asyncio.StreamWriter] = {}
+workers: dict[messages.Worker, asyncio.StreamWriter] = {}
 
 db = DB()
 
@@ -57,7 +56,7 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                     if data.arch:
                         worker = data
                         workers[data] = writer
-                        logging.info('%s of %s connected', worker.name, worker.arch)
+                        logging.info('%s of arch %s connected', worker.name, worker.arch)
                         keepaliver = asyncio.ensure_future(periodic_keepalive(writer))
                 elif isinstance(data, messages.GlobalJob):
                     logging.info('got bugs %s', data.bugs)
@@ -79,7 +78,7 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
 
         if worker.name:
             logging.warning('[%s] simple close', worker.name)
-    except asyncio.exceptions.IncompleteReadError as exc:
+    except asyncio.IncompleteReadError as exc:
         logging.warning('[%s] IncompleteReadError', worker.name, exc_info=exc)
     except ConnectionResetError:
         logging.warning('[%s] ConnectionResetError', worker.name)
@@ -90,7 +89,7 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     if keepaliver:
         keepaliver.cancel()
     if worker.name:
-        logging.warning('[%s] we lost', worker.name)
+        logging.warning('Tester [%s] was disconnected', worker.name)
     workers.pop(worker, None)
 
 
