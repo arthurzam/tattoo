@@ -47,7 +47,7 @@ async def periodic_keepalive(writer: asyncio.StreamWriter):
         pass
 
 async def get_status():
-    if workers_status:
+    if workers:
         for worker in workers:
             workers_status[worker] = asyncio.get_running_loop().create_future()
         for worker, writer in workers.items():
