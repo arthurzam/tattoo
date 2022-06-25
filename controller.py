@@ -182,15 +182,15 @@ async def handler(socket_file: Path):
 
 def argv_parser() -> ArgumentParser:
     parser = ArgumentParser()
-    parser.add_argument("-c", "--connect", dest="connect", action="store_true",
+    parser.add_argument("-c", "--connect", action="store_true",
                         help="Connect to all remote managers at start using ssh_config file")
-    parser.add_argument("-d", "--disconnect", dest="disconnect", action="store_true",
+    parser.add_argument("-d", "--disconnect", action="store_true",
                         help="Disconnect from all remove managers at end")
-    parser.add_argument("-s", "--scan", dest="scan", action="store", const='*', nargs='?',
+    parser.add_argument("-s", "--scan", action="store", const='*', nargs='?',
                         help="Run scan for bugs on remote managers (optional comma delimited host list)")
-    parser.add_argument("-i", "--info", dest="info", action="store_true",
+    parser.add_argument("-i", "--info", action="store_true",
                         help="Show info about the connected managers and testers")
-    parser.add_argument("-b", "--bugs", dest="bugs", nargs='*', type=int,
+    parser.add_argument("-b", "--bugs", nargs='*', type=int,
                         help="Bugs to test")
 
     subparsers = parser.add_subparsers(title='actions', dest='action')

@@ -218,11 +218,11 @@ async def handler(worker: messages.Worker, jobs_count: int):
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument("-n", "--name", dest="name", action="store", required=True,
+    parser.add_argument("-n", "--name", action="store", required=True,
                         help="name for the tester, easy to identify")
-    parser.add_argument("-a", "--arch", dest="arch", action="store", required=True,
+    parser.add_argument("-a", "--arch", action="store", required=True,
                         help="Gentoo's arch name. Prepend with ~ for keywording")
-    parser.add_argument("-j", "--jobs", dest="jobs", type=int, action="store", default=2,
+    parser.add_argument("-j", "--jobs", type=int, action="store", default=2,
                         help="Amount of simultaneous testing jobs")
     options = parser.parse_args()
 
