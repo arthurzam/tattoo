@@ -17,8 +17,6 @@ import bugs_fetcher
 import messages
 from sdnotify import sdnotify, set_logging_format
 
-set_logging_format()
-
 testing_dir = Path('/tmp/run')
 failure_collection_dir = Path.home() / 'logs/failures'
 class IrkerSender(asyncio.DatagramProtocol):
@@ -44,21 +42,38 @@ class IrkerSender(asyncio.DatagramProtocol):
         )
 
 
-def parse_report_file(report_file: Path) -> Iterator[str]:
+def parse_report_file(report_file: Path) -> Iterator[dict[str, str]]:
     try:
-        report = json.loads(report_file.read_text(encoding='utf8').strip()[:-1] + ']}')
-    except json.JSONDecodeError:
-        yield 'JSON decoding failed'
+        lines = report_file.read_text().splitlines(keepends=False)
+    except FileNotFoundError:
         return
-    for run in report['runs']:
-        if not run['result']:
+
+    run: dict[str, str] = {}
+    for line in map(str.strip, lines):
+        if not line or line.startswith('#'):
+            continue
+        elif line == '---':
+            if len(run) != 0:
+                yield run
+                run = {}
+        elif ':' in line:
+            key, value = line.split(':', maxsplit=1)
+            run[key.strip()] = value.strip()
+    if len(run) != 0:
+        yield run
+        run = {}
+
+
+def collect_failures(report_file: Path) -> Iterator[str]:
+    for run in parse_report_file(report_file):
+        if run['result'].lower() != 'true':
             atom = run['atom']
             if failure_str := run.get('failure_str', None):
                 yield f'   {atom} special fail: {failure_str}'
             elif 'test' in run['features']:
                 yield f'   {atom} test run failed'
             elif useflags := run['useflags']:
-                yield f'   {atom} USE flag run failed: [{useflags.strip()}]'
+                yield f'   {atom} USE flag run failed: [{useflags}]'
             else:
                 yield f'   {atom} default USE failed'
 
@@ -104,7 +119,7 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
         )
         if 0 != await proc.wait():
             await writer(messages.BugJobDone(bug_number=bug_no, success=False))
-            return 'fail\n' + '\n'.join(parse_report_file(testing_dir / f'{bug_no}.report'))
+            return 'fail\n' + '\n'.join(collect_failures(testing_dir / f'{bug_no}.report'))
         await writer(messages.BugJobDone(bug_number=bug_no, success=True))
         return ''
     finally:
@@ -210,4 +225,5 @@ def main():
 
 
 if __name__ == '__main__':
+    set_logging_format()
     main()
