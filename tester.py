@@ -24,9 +24,9 @@ failure_collection_dir = Path.home() / 'logs/failures'
 class IrkerSender(asyncio.DatagramProtocol):
     IRC_CHANNEL = "#gentoo-tattoo"
 
-    def __init__(self, bugno: int, msg: str):
+    def __init__(self, identifier: str, bugno: int, msg: str):
         irker_spigot = f"ircs://irc.libera.chat:6697/{IrkerSender.IRC_CHANNEL}"
-        message = f"\x0314[{options.name}]: \x0305bug #{bugno}\x0F - {msg}"
+        message = f"\x0314[{identifier}]: \x0305bug #{bugno}\x0F - {msg}"
         self.message = json.dumps({"to": irker_spigot, "privmsg": message}).encode("utf8")
 
     def connection_made(self, transport):
@@ -37,9 +37,9 @@ class IrkerSender(asyncio.DatagramProtocol):
         logging.error("send to irker failed", exc_info=exc)
 
     @staticmethod
-    async def send_message(bugno: int, msg: str):
+    async def send_message(identifier: str, bugno: int, msg: str):
         await asyncio.get_event_loop().create_datagram_endpoint(
-            lambda: IrkerSender(bugno, msg),
+            lambda: IrkerSender(identifier, bugno, msg),
             remote_addr=("127.0.0.1", 6659)
         )
 
@@ -119,21 +119,21 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
         await proc.wait()
 
 
-async def worker_func(queue: asyncio.Queue, writer: Callable[[Any], Any]):
+async def worker_func(worker: messages.Worker, queue: asyncio.Queue, writer: Callable[[Any], Any]):
     with contextlib.suppress(asyncio.CancelledError):
         while True:
             bug_no: int = await queue.get()
             try:
                 result = await test_run(writer, bug_no)
-                await IrkerSender.send_message(bug_no, result or 'success')
+                await IrkerSender.send_message(worker.name, bug_no, result or 'success')
             except asyncio.CancelledError:
                 return
             except Exception as exc:
-                result = f'error: {exc}'
+                logging.error('fail', exc_info=exc)
             queue.task_done()
 
 
-async def handler():
+async def handler(worker: messages.Worker, jobs_count: int):
     reader, writer = await asyncio.open_unix_connection(path=messages.socket_filename)
     def writer_func(obj: Any):
         writer.write(messages.dump(obj))
@@ -142,7 +142,7 @@ async def handler():
     await writer_func(worker)
 
     queue = asyncio.Queue()
-    tasks = [asyncio.create_task(worker_func(queue, writer_func), name=f'Tester {i + 1}') for i in range(options.jobs)]
+    tasks = [asyncio.create_task(worker_func(worker, queue, writer_func), name=f'Tester {i + 1}') for i in range(jobs_count)]
 
     sdnotify('READY=1')
 
@@ -174,38 +174,40 @@ async def handler():
 
 
 def main():
+    parser = ArgumentParser()
+    parser.add_argument("-n", "--name", dest="name", action="store", required=True,
+                        help="name for the tester, easy to identify")
+    parser.add_argument("-a", "--arch", dest="arch", action="store", required=True,
+                        help="Gentoo's arch name. Prepend with ~ for keywording")
+    parser.add_argument("-j", "--jobs", dest="jobs", type=int, action="store", default=2,
+                        help="Amount of simultaneous testing jobs")
+    options = parser.parse_args()
+
+    if not os.path.exists(messages.socket_filename):
+        logging.error("%s socket doesn't exist", messages.socket_filename)
+        return
+
+    os.makedirs(testing_dir, exist_ok=True)
+    os.makedirs(failure_collection_dir, exist_ok=True)
+
+    worker = messages.Worker(name=options.name, arch=options.arch)
+
     asyncio.set_event_loop(loop := asyncio.new_event_loop())
     retry_counter = 0
     while retry_counter < 5:
         try:
             logging.info('connecting to manager')
-            loop.run_until_complete(handler())
+            loop.run_until_complete(handler(worker, options.jobs))
             retry_counter = 0
         except KeyboardInterrupt:
             logging.info('Caught a CTRL + C, good bye')
-            return
+            break
         except Exception:
             sleep(0.5)
             retry_counter += 1
         sdnotify('RELOADING=1')
-
-
-parser = ArgumentParser()
-parser.add_argument("-n", "--name", dest="name", action="store", required=True,
-                    help="name for the tester, easy to identify")
-parser.add_argument("-a", "--arch", dest="arch", action="store", required=True,
-                    help="Gentoo's arch name. Prepend with ~ for keywording")
-parser.add_argument("-j", "--jobs", dest="jobs", type=int, action="store", default=2,
-                    help="Amount of simultaneous testing jobs")
-options = parser.parse_args()
-
-# signal.signal(signal.SIGCHLD, signal.SIG_IGN)
-
-worker = messages.Worker(name=options.name, arch=options.arch)
-
-os.makedirs(testing_dir, exist_ok=True)
-os.makedirs(failure_collection_dir, exist_ok=True)
-
-if os.path.exists(messages.socket_filename):
-    main()
     sdnotify('STOPPING=1')
+
+
+if __name__ == '__main__':
+    main()
