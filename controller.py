@@ -72,9 +72,9 @@ async def disconnect():
     await asyncio.gather(*(
         run_ssh('-O', 'exit', host) for host in collect_ssh_hosts()
     ))
-    from shutil import rmtree
-    rmtree(comm_dir, ignore_errors=True)
-    rmtree(base_dir / 'control', ignore_errors=True)
+    for host in collect_ssh_hosts():
+        (comm_dir / host).unlink(missing_ok=True)
+        (base_dir / 'control' / host).unlink(missing_ok=True)
 
 
 def apply_passes(passes: list[tuple[int, str]]):
