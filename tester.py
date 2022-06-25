@@ -1,17 +1,18 @@
 #!/usr/bin/env python
 
-from random import shuffle
-from typing import Any, Callable, Iterator
-from argparse import ArgumentParser
-from time import sleep
-from pathlib import Path
-import contextlib
-import subprocess
-import logging
 import asyncio
-import signal
+import contextlib
 import json
+import logging
 import os
+import re
+import signal
+import subprocess
+from argparse import ArgumentParser
+from pathlib import Path
+from random import shuffle
+from time import sleep
+from typing import Any, Callable, Iterator
 
 import bugs_fetcher
 import messages
@@ -66,7 +67,7 @@ def parse_report_file(report_file: Path) -> Iterator[dict[str, str]]:
 
 def collect_failures(report_file: Path) -> Iterator[str]:
     for run in parse_report_file(report_file):
-        if run['result'].lower() != 'true':
+        if run.get('result', '').lower() != 'true':
             atom = run['atom']
             if failure_str := run.get('failure_str', None):
                 yield f'   {atom} special fail: {failure_str}'
@@ -148,6 +149,28 @@ async def worker_func(worker: messages.Worker, queue: asyncio.Queue, writer: Cal
             queue.task_done()
 
 
+async def running_emerge_jobs() -> tuple[str]:
+    proc = await asyncio.create_subprocess_exec(
+        'qlop', '-r', '-F', '$%{CATEGORY}/%{PF}$',
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=20)
+    except asyncio.TimeoutError:
+        logging.error('`qlop -r` timed out')
+        return ()
+    if proc.returncode != 0:
+        logging.error('`qlop -r` failed with:\n%s', stderr)
+        return ()
+    atom_re = re.compile(r'^.* >>> \$(?P<atom>.*)\$... .*$')
+    return tuple(
+        mo.group('atom')
+        for line in stdout.splitlines()
+        if (mo := atom_re.match(line.decode()))
+    )
+
+
 async def handler(worker: messages.Worker, jobs_count: int):
     reader, writer = await asyncio.open_unix_connection(path=messages.socket_filename)
     def writer_func(obj: Any):
@@ -173,6 +196,11 @@ async def handler(worker: messages.Worker, jobs_count: int):
                             await queue.put(bug_no)
                 except Exception as exc:
                     logging.error('Running GlobalJob failed', exc_info=exc)
+            elif isinstance(data, messages.GetStatus):
+                await writer_func(messages.TesterStatus(
+                    bugs_queue=tuple(queue._queue),
+                    merging_atoms=await running_emerge_jobs(),
+                ))
     except asyncio.exceptions.IncompleteReadError:
         logging.warning('Abrupt connection closed')
     except ConnectionResetError:

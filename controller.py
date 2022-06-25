@@ -154,6 +154,14 @@ async def handler(socket_file: Path):
                 logging.info("Initiated scan for [%s]", socket_file.name)
         await writer.drain()
 
+        if OPTIONS.info:
+            writer.write(messages.dump(messages.GetStatus()))
+            logging.info("Requesting status for [%s]", socket_file.name)
+            await writer.drain()
+            data = messages.load(await reader.readuntil(b'\n'))
+            if isinstance(data, messages.ManagerStatus):
+                statuses[socket_file.name] = data
+
         if OPTIONS.action == 'fetch':
             now = datetime.utcnow()
             writer.write(messages.dump(messages.CompletedJobsRequest(since=fetch_datetimes.get(socket_file.name, datetime.fromtimestamp(0)))))
@@ -180,6 +188,8 @@ def argv_parser() -> ArgumentParser:
                         help="Disconnect from all remove managers at end")
     parser.add_argument("-s", "--scan", dest="scan", action="store", const='*', nargs='?',
                         help="Run scan for bugs on remote managers (optional comma delimited host list)")
+    parser.add_argument("-i", "--info", dest="info", action="store_true",
+                        help="Show info about the connected managers and testers")
     parser.add_argument("-b", "--bugs", dest="bugs", nargs='*', type=int,
                         help="Bugs to test")
 
@@ -200,6 +210,7 @@ def argv_parser() -> ArgumentParser:
 OPTIONS = None
 fetch_datetimes = read_fetch_datetimes()
 fetch_bugs_passed: list[tuple[int, str]] = []
+statuses: dict[str, messages.ManagerStatus] = {}
 
 
 async def main():
@@ -219,6 +230,24 @@ async def main():
 
     if OPTIONS.disconnect:
         await disconnect()
+
+    if OPTIONS.info:
+        for host, status in statuses.items():
+            print(f'{host}:')
+            print('|')
+            print(f'+-- CPUs: {status.cpu_count}')
+            print(f'+-- Load: {status.load[0]:.2f} ({100 * status.load[0] / status.cpu_count:.2f}%)')
+            for tester, tester_status in status.testers.items():
+                print(f'+-- "{tester.name}" of arch {tester.arch}:')
+                print('    |')
+                print(f'    +-- Queue (size {len(tester_status.bugs_queue)})')
+                if tester_status.bugs_queue:
+                    print(f'        {", ".join(map(str, tester_status.bugs_queue[:7]))}')
+                print('    +-- Running emerge jobs')
+                if tester_status.merging_atoms:
+                    print('        |')
+                    for job in tester_status.merging_atoms:
+                        print(f'        +-- {job}')
 
 if __name__ == '__main__':
     asyncio.run(main())

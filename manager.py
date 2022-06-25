@@ -9,9 +9,9 @@ import bugs_fetcher
 from sdnotify import sdnotify, set_logging_format
 
 import logging
-set_logging_format()
 
 workers: dict[messages.Worker, asyncio.StreamWriter] = {}
+workers_status: dict[messages.Worker, asyncio.Future] = {}
 
 db = DB()
 
@@ -46,6 +46,20 @@ async def periodic_keepalive(writer: asyncio.StreamWriter):
     except asyncio.CancelledError:
         pass
 
+async def get_status():
+    for worker in workers:
+        workers_status[worker] = asyncio.get_running_loop().create_future()
+    for worker, writer in workers.items():
+        writer.write(messages.dump(messages.GetStatus()))
+        await writer.drain()
+    worker_names, statuses = tuple(zip(*workers_status.items()))
+    statuses = await asyncio.gather(*statuses)
+    return messages.ManagerStatus(
+        load=os.getloadavg(),
+        cpu_count=os.cpu_count(),
+        testers=dict(zip(worker_names, statuses)),
+    )
+
 async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     worker = messages.Worker(name='', arch='')
     keepaliver = None
@@ -55,7 +69,7 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                 data = await reader.readline()
                 if not data:
                     break
-            except asyncio.exceptions.IncompleteReadError as exc:
+            except asyncio.IncompleteReadError as exc:
                 logging.info('pos')
                 data = exc.partial
             if data:
@@ -76,12 +90,14 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                     await writer.drain()
                 elif isinstance(data, messages.DoScan):
                     asyncio.ensure_future(do_scan())
-                elif isinstance(data, messages.GetLoad):
-                    writer.write(messages.dump(messages.LoadResponse(*os.getloadavg())))
+                elif isinstance(data, messages.TesterStatus):
+                    workers_status.pop(worker).set_result(data)
+                elif isinstance(data, messages.GetStatus):
+                    writer.write(messages.dump(await get_status()))
                     await writer.drain()
 
         if worker.name:
-            logging.warning('[%s] simple close', worker.name)
+            logging.info('[%s] normal connection closed', worker.name)
     except asyncio.IncompleteReadError as exc:
         logging.warning('[%s] IncompleteReadError', worker.name, exc_info=exc)
     except ConnectionResetError:
@@ -112,4 +128,5 @@ def main():
         sdnotify('STOPPING=1')
 
 if __name__ == '__main__':
+    set_logging_format()
     main()

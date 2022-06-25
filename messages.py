@@ -42,14 +42,19 @@ class DoScan:
     pass
 
 
-class GetLoad:
+class GetStatus:
     pass
 
 
-class LoadResponse(NamedTuple):
-    load1: float
-    load5: float
-    load15: float
+class TesterStatus(NamedTuple):
+    bugs_queue: tuple[int, ...]
+    merging_atoms: tuple[str, ...]
+
+
+class ManagerStatus(NamedTuple):
+    load: tuple[float, float, float]
+    cpu_count: int
+    testers: dict[Worker, TesterStatus]
 
 
 def dump(obj) -> bytes:
