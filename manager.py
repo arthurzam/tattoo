@@ -47,17 +47,20 @@ async def periodic_keepalive(writer: asyncio.StreamWriter):
         pass
 
 async def get_status():
-    for worker in workers:
-        workers_status[worker] = asyncio.get_running_loop().create_future()
-    for worker, writer in workers.items():
-        writer.write(messages.dump(messages.GetStatus()))
-        await writer.drain()
-    worker_names, statuses = tuple(zip(*workers_status.items()))
-    statuses = await asyncio.gather(*statuses)
+    if workers_status:
+        for worker in workers:
+            workers_status[worker] = asyncio.get_running_loop().create_future()
+        for worker, writer in workers.items():
+            writer.write(messages.dump(messages.GetStatus()))
+            await writer.drain()
+        worker_names, statuses = tuple(zip(*workers_status.items()))
+        statuses = dict(zip(worker_names, await asyncio.gather(*statuses)))
+    else:
+        statuses = {}
     return messages.ManagerStatus(
         load=os.getloadavg(),
         cpu_count=os.cpu_count(),
-        testers=dict(zip(worker_names, statuses)),
+        testers=statuses,
     )
 
 async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
