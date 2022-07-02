@@ -23,19 +23,14 @@ async def process_bugs(bugs: list[int]):
         await workers[worker].drain()
     logging.info('finished processing bugs')
 
-async def do_scan():
-    logging.info('started scan for new bugs')
+async def do_scan(trigger: str):
+    logging.info('started %s scan for new bugs', trigger)
     for worker, bugs in bugs_fetcher.collect_bugs([], *workers.keys()):
         if bugs := list(db.filter_not_tested(worker.canonical_arch(), frozenset(bugs))):
             logging.info('sent to %s bugs %s', worker.name, bugs)
             workers[worker].write(messages.dump(messages.GlobalJob(bugs)))
             await workers[worker].drain()
-    logging.info('finished scan for new bugs')
-
-async def auto_scan(interval: int):
-    while True:
-        await asyncio.sleep(interval)
-        await do_scan()
+    logging.info('finished %s scan for new bugs', trigger)
 
 async def periodic_keepalive(writer: asyncio.StreamWriter):
     try:
@@ -62,6 +57,23 @@ async def get_status():
         cpu_count=os.cpu_count(),
         testers=statuses,
     )
+
+async def auto_scan():
+    while True:
+        await asyncio.sleep(14400) # 4h = 4 * 60 * 60s
+
+        status = await get_status()
+        if not status.testers:
+            logging.warning("Self scan skipped because no testers are connected")
+            continue
+        if any(t.bugs_queue for t in status.testers.values()):
+            logging.warning("Self scan skipped because tester's queues aren't empty")
+            continue
+        while (load := 100 * status.load[0] / status.cpu_count) > 50:
+            logging.warning("Self scan postponed because of high load (%.2f%%)", load)
+            await asyncio.sleep(1200) # 20m = 20 * 60s
+
+        await do_scan("self")
 
 async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     worker = messages.Worker(name='', arch='')
@@ -92,7 +104,7 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                     writer.write(messages.dump(db.get_reportes(data.since)))
                     await writer.drain()
                 elif isinstance(data, messages.DoScan):
-                    asyncio.ensure_future(do_scan())
+                    asyncio.ensure_future(do_scan("manuel"))
                 elif isinstance(data, messages.TesterStatus):
                     workers_status.pop(worker).set_result(data)
                 elif isinstance(data, messages.GetStatus):
@@ -116,20 +128,19 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     workers.pop(worker, None)
 
 
-def main():
+async def main():
     try:
         if os.path.exists(messages.socket_filename):
             os.remove(messages.socket_filename)
-        asyncio.set_event_loop(loop := asyncio.new_event_loop())
-        loop.run_until_complete(asyncio.start_unix_server(handler, path=messages.socket_filename))
+        server = await asyncio.start_unix_server(handler, path=messages.socket_filename)
         os.chmod(messages.socket_filename, 0o666)
         sdnotify('READY=1')
-        # asyncio.ensure_future(auto_scan(3600))
-        loop.run_forever()
+        asyncio.ensure_future(auto_scan())
+        await server.serve_forever()
     except KeyboardInterrupt:
         logging.info('Caught a CTRL + C, good bye')
         sdnotify('STOPPING=1')
 
 if __name__ == '__main__':
     set_logging_format()
-    main()
+    asyncio.run(main())
