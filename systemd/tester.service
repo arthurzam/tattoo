@@ -8,3 +8,6 @@ WorkingDirectory=/srv/tattoo
 ExecStart=/usr/bin/python /srv/tattoo/tester.py -n [worker-name] -a [arch] -j [jobs]
 SyslogIdentifier=tattoo
 KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

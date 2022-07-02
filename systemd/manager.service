@@ -9,3 +9,6 @@ Type=notify
 WorkingDirectory=/srv/tattoo
 ExecStart=/usr/bin/python /srv/tattoo/manager.py
 SyslogIdentifier=tattoo
+
+[Install]
+WantedBy=multi-user.target
