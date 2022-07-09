@@ -216,9 +216,6 @@ statuses: dict[str, messages.ManagerStatus] = {}
 
 
 async def main():
-    global OPTIONS
-    OPTIONS = argv_parser().parse_args()
-
     if OPTIONS.connect:
         await connect()
 
@@ -252,4 +249,5 @@ async def main():
                         print(f'        +-- {job}')
 
 if __name__ == '__main__':
+    OPTIONS = argv_parser().parse_args()
     asyncio.run(main())

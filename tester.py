@@ -149,14 +149,13 @@ async def worker_func(worker: messages.Worker, queue: BugsQueue, writer: Callabl
                 return
             except Exception as exc:
                 logging.error('fail', exc_info=exc)
-            queue.task_done()
+            queue.bug_done(bug_no)
 
 
 async def running_emerge_jobs() -> tuple[str]:
     proc = await asyncio.create_subprocess_exec(
         'qlop', '-r', '-F', '$%{CATEGORY}/%{PF}$',
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=20)
@@ -172,6 +171,15 @@ async def running_emerge_jobs() -> tuple[str]:
         for line in stdout.splitlines()
         if (mo := atom_re.match(line.decode()))
     )
+
+
+def queue_append_bugs(queue: BugsQueue, worker: messages.Worker, job: messages.GlobalJob):
+    for _, bugs in bugs_fetcher.collect_bugs(job.bugs, worker):
+        bugs = list(frozenset(bugs).difference(queue.bugs, queue.running))
+        shuffle(bugs)
+        for bug_no in bugs:
+            logging.info('Queuing %d', bug_no)
+            queue.put_nowait(BugsQueueItem(bug=bug_no, priority=job.priority))
 
 
 async def handler(worker: messages.Worker, jobs_count: int):
@@ -192,16 +200,12 @@ async def handler(worker: messages.Worker, jobs_count: int):
             data = messages.load(data)
             if isinstance(data, messages.GlobalJob):
                 try:
-                    for _, bugs in bugs_fetcher.collect_bugs(data.bugs, worker):
-                        shuffle(bugs)
-                        for bug_no in bugs:
-                            logging.info('Queuing %d', bug_no)
-                            queue.put_nowait(BugsQueueItem(bug=bug_no, priority=data.priority))
+                    queue_append_bugs(queue, worker, data)
                 except Exception as exc:
                     logging.error('Running GlobalJob failed', exc_info=exc)
             elif isinstance(data, messages.GetStatus):
                 await writer_func(messages.TesterStatus(
-                    bugs_queue=queue.bugs,
+                    bugs_queue=tuple(queue.running) + queue.bugs,
                     merging_atoms=await running_emerge_jobs(),
                 ))
     except asyncio.IncompleteReadError:

@@ -19,12 +19,19 @@ class BugsQueue(Queue):
     def _init(self, maxsize: int):
         self._queue: list[BugsQueueInnerItem] = []
         self.counter = count()
+        self.running: list[int] = []
 
     def _get(self) -> int:
-        return heappop(self._queue).bug
+        bug_no = heappop(self._queue).bug
+        self.running.append(bug_no)
+        return bug_no
 
     def _put(self, item: BugsQueueItem):
         heappush(self._queue, BugsQueueInnerItem(**item._asdict(), count=next(self.counter)))
+
+    def bug_done(self, bug_no: int):
+        self.running.remove(bug_no)
+        return super().task_done()
 
     @property
     def bugs(self):
