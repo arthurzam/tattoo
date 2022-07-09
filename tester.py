@@ -16,10 +16,13 @@ from typing import Any, Callable, Iterator
 
 import bugs_fetcher
 import messages
+from bugs_queue import BugsQueue, BugsQueueItem
 from sdnotify import sdnotify, set_logging_format
 
 testing_dir = Path('/tmp/run')
 failure_collection_dir = Path.home() / 'logs/failures'
+
+
 class IrkerSender(asyncio.DatagramProtocol):
     IRC_CHANNEL = "#gentoo-tattoo"
 
@@ -135,7 +138,7 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
         await proc.wait()
 
 
-async def worker_func(worker: messages.Worker, queue: asyncio.Queue, writer: Callable[[Any], Any]):
+async def worker_func(worker: messages.Worker, queue: BugsQueue, writer: Callable[[Any], Any]):
     with contextlib.suppress(asyncio.CancelledError):
         while True:
             bug_no: int = await queue.get()
@@ -179,7 +182,7 @@ async def handler(worker: messages.Worker, jobs_count: int):
 
     await writer_func(worker)
 
-    queue = asyncio.Queue()
+    queue = BugsQueue()
     tasks = [asyncio.create_task(worker_func(worker, queue, writer_func), name=f'Tester {i + 1}') for i in range(jobs_count)]
 
     sdnotify('READY=1')
@@ -193,15 +196,15 @@ async def handler(worker: messages.Worker, jobs_count: int):
                         shuffle(bugs)
                         for bug_no in bugs:
                             logging.info('Queuing %d', bug_no)
-                            await queue.put(bug_no)
+                            queue.put_nowait(BugsQueueItem(bug=bug_no, priority=data.priority))
                 except Exception as exc:
                     logging.error('Running GlobalJob failed', exc_info=exc)
             elif isinstance(data, messages.GetStatus):
                 await writer_func(messages.TesterStatus(
-                    bugs_queue=tuple(queue._queue),
+                    bugs_queue=queue.bugs,
                     merging_atoms=await running_emerge_jobs(),
                 ))
-    except asyncio.exceptions.IncompleteReadError:
+    except asyncio.IncompleteReadError:
         logging.warning('Abrupt connection closed')
     except ConnectionResetError:
         logging.warning('Abrupt connection reset')

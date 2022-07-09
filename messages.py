@@ -26,6 +26,7 @@ class BugJobDone(NamedTuple):
 
 class GlobalJob(NamedTuple):
     bugs: list[int]
+    priority: int = 0
 
 
 class CompletedJobsRequest(NamedTuple):

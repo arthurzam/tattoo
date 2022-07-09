@@ -147,7 +147,7 @@ async def handler(socket_file: Path):
     try:
         writer.write(messages.dump(messages.Worker(name='', arch='')))
         if OPTIONS.bugs:
-            writer.write(messages.dump(messages.GlobalJob(bugs=OPTIONS.bugs)))
+            writer.write(messages.dump(messages.GlobalJob(priority=OPTIONS.priority, bugs=OPTIONS.bugs)))
         if OPTIONS.scan:
             if OPTIONS.scan == '*' or socket_file.name in OPTIONS.scan.split(','):
                 writer.write(messages.dump(messages.DoScan()))
@@ -192,6 +192,8 @@ def argv_parser() -> ArgumentParser:
                         help="Show info about the connected managers and testers")
     parser.add_argument("-b", "--bugs", nargs='*', type=int,
                         help="Bugs to test")
+    parser.add_argument("-p", "--priority", type=int, default=0,
+                        help="Priority for specified bugs")
 
     subparsers = parser.add_subparsers(title='actions', dest='action')
 

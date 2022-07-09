@@ -15,11 +15,11 @@ workers_status: dict[messages.Worker, asyncio.Future] = {}
 
 db = DB()
 
-async def process_bugs(bugs: list[int]):
-    logging.info('processing bugs %s', bugs)
-    for worker, bugs in bugs_fetcher.collect_bugs(bugs, *workers.keys()):
+async def process_bugs(job: messages.GlobalJob):
+    logging.info('processing bugs %s', job.bugs)
+    for worker, bugs in bugs_fetcher.collect_bugs(job.bugs, *workers.keys()):
         logging.info('sent to %s bugs %s', worker.name, bugs)
-        workers[worker].write(messages.dump(messages.GlobalJob(bugs)))
+        workers[worker].write(messages.dump(messages.GlobalJob(priority=job.priority, bugs=bugs)))
         await workers[worker].drain()
     logging.info('finished processing bugs')
 
@@ -28,7 +28,7 @@ async def do_scan(trigger: str):
     for worker, bugs in bugs_fetcher.collect_bugs([], *workers.keys()):
         if bugs := list(db.filter_not_tested(worker.canonical_arch(), frozenset(bugs))):
             logging.info('sent to %s bugs %s', worker.name, bugs)
-            workers[worker].write(messages.dump(messages.GlobalJob(bugs)))
+            workers[worker].write(messages.dump(messages.GlobalJob(priority=100, bugs=bugs)))
             await workers[worker].drain()
     logging.info('finished %s scan for new bugs', trigger)
 
@@ -96,7 +96,7 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                         logging.info('%s of arch %s connected', worker.name, worker.arch)
                         keepaliver = asyncio.ensure_future(periodic_keepalive(writer))
                 elif isinstance(data, messages.GlobalJob):
-                    asyncio.ensure_future(process_bugs(data.bugs))
+                    asyncio.ensure_future(process_bugs(data))
                 elif isinstance(data, messages.BugJobDone):
                     logging.debug('done %d,%s', data.bug_number, worker.canonical_arch())
                     db.report_job(worker, data)
