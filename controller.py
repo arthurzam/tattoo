@@ -79,7 +79,7 @@ async def disconnect():
 
 def apply_passes(passes: list[tuple[int, str]]):
     from nattka.bugzilla import NattkaBugzilla, BugCategory, arches_from_cc
-    from nattka.package import find_repository, match_package_list, add_keywords
+    from nattka.package import find_repository, match_package_list, add_keywords, PackageListDoneAlready
     from nattka.git import GitWorkTree, git_commit
 
     if api_key := os.getenv('ARCHTESTER_BUGZILLA_APIKEY'):
@@ -130,6 +130,8 @@ def apply_passes(passes: list[tuple[int, str]]):
                     logging.info("processed %d,%s", bug_no, arch)
                     for a in to_remove:
                         bug_cc.remove(a)
+            except PackageListDoneAlready:
+                logging.warning("skipping %d,%s as it was already done", bug_no, arch, exc_info=exc)
             except Exception as exc:
                 logging.error("failed to apply for %d,%s", bug_no, arch, exc_info=exc)
 
