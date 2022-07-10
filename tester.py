@@ -152,11 +152,15 @@ async def worker_func(worker: messages.Worker, queue: BugsQueue, writer: Callabl
             queue.bug_done(bug_no)
 
 
-async def running_emerge_jobs() -> tuple[str]:
-    proc = await asyncio.create_subprocess_exec(
-        'qlop', '-r', '-F', '$%{CATEGORY}/%{PF}$',
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    )
+async def running_emerge_jobs() -> tuple[str, ...]:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            'qlop', '-r', '-F', '$%{CATEGORY}/%{PF}$',
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        logging.error('qlop not found - install "app-portage/portage-utils"')
+        return ('???', )
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=20)
     except asyncio.TimeoutError:
