@@ -11,7 +11,6 @@ def set_logging_format():
         logging.basicConfig(format='[{levelname}] {message}', style='{', level=logging.INFO)
     else:
         logging.basicConfig(format='{asctime} | [{levelname}] {message}', style='{', level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S")
-        logging.info('NOTIFY_SOCKET is not set')
 
 
 def sdnotify(state: str):

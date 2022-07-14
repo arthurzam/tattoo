@@ -1,18 +1,28 @@
 #!/usr/bin/env python
 
+import asyncio
+import contextlib
+import logging
+import os
+import subprocess
 from argparse import ArgumentError, ArgumentParser
-from typing import Iterator
 from datetime import datetime
 from pathlib import Path
-import contextlib
-import subprocess
-import asyncio
-import os
-
-import logging
-logging.basicConfig(format='{asctime} | [{levelname}] {message}', style='{', level=logging.INFO)
+from typing import Any, Iterator
 
 import messages
+from sdnotify import set_logging_format
+
+set_logging_format()
+
+try:
+    from nattka.bugzilla import BugCategory, NattkaBugzilla, arches_from_cc
+    from nattka.git import GitWorkTree, git_commit
+    from nattka.package import (PackageListDoneAlready, add_keywords,
+                                find_repository, match_package_list)
+    HAVE_NATTKA = True
+except ImportError:
+    HAVE_NATTKA = False
 
 base_dir = Path('/tmp/tattoo')
 comm_dir = base_dir / 'comm'
@@ -78,10 +88,6 @@ async def disconnect():
 
 
 def apply_passes(passes: list[tuple[int, str]]):
-    from nattka.bugzilla import NattkaBugzilla, BugCategory, arches_from_cc
-    from nattka.package import find_repository, match_package_list, add_keywords, PackageListDoneAlready
-    from nattka.git import GitWorkTree, git_commit
-
     if api_key := os.getenv('ARCHTESTER_BUGZILLA_APIKEY'):
         nattka_bugzilla = NattkaBugzilla(api_key=api_key)
     else:
@@ -130,7 +136,7 @@ def apply_passes(passes: list[tuple[int, str]]):
                     logging.info("processed %d,%s", bug_no, arch)
                     for a in to_remove:
                         bug_cc.remove(a)
-            except PackageListDoneAlready:
+            except PackageListDoneAlready as exc:
                 logging.warning("skipping %d,%s as it was already done", bug_no, arch, exc_info=exc)
             except Exception as exc:
                 logging.error("failed to apply for %d,%s", bug_no, arch, exc_info=exc)
@@ -211,7 +217,7 @@ def argv_parser() -> ArgumentParser:
     return parser
 
 
-OPTIONS = None
+OPTIONS: Any = None
 fetch_datetimes = read_fetch_datetimes()
 fetch_bugs_passed: list[tuple[int, str]] = []
 statuses: dict[str, messages.ManagerStatus] = {}
@@ -223,11 +229,11 @@ async def main():
 
     await asyncio.gather(*map(handler, comm_dir.iterdir()))
 
-    if OPTIONS.action == 'fetch' and not OPTIONS.fetch_dryrun:
+    if OPTIONS.action == 'fetch' and not OPTIONS.fetch_dryrun and HAVE_NATTKA:
         if fetch_bugs_passed and OPTIONS.fetch_apply and OPTIONS.fetch_repo:
             apply_passes(fetch_bugs_passed)
-        with fetch_datetime_file.open('w') as f:
-            f.writelines((f'{host}={date.isoformat()}\n' for host, date in fetch_datetimes.items()))
+        with fetch_datetime_file.open('w') as file:
+            file.writelines((f'{host}={date.isoformat()}\n' for host, date in fetch_datetimes.items()))
 
     if OPTIONS.disconnect:
         await disconnect()
@@ -240,15 +246,15 @@ async def main():
             print(f'+-- Load: {status.load[0]:.2f} ({100 * status.load[0] / status.cpu_count:.2f}%)')
             for tester, tester_status in status.testers.items():
                 print(f'+-- "{tester.name}" of arch {tester.arch}:')
-                print('    |')
-                print(f'    +-- Queue (size {len(tester_status.bugs_queue)})')
+                print('|   |')
+                print(f'|   +-- Queue (size {len(tester_status.bugs_queue)})')
                 if tester_status.bugs_queue:
                     print(f'        {", ".join(map(str, tester_status.bugs_queue[:7]))}')
-                print('    +-- Running emerge jobs')
+                print('|   +-- Running emerge jobs')
                 if tester_status.merging_atoms:
-                    print('        |')
+                    print('|       |')
                     for job in tester_status.merging_atoms:
-                        print(f'        +-- {job}')
+                        print(f'|       +-- {job}')
 
 if __name__ == '__main__':
     OPTIONS = argv_parser().parse_args()

@@ -171,9 +171,9 @@ async def running_emerge_jobs() -> tuple[str, ...]:
         return ()
     atom_re = re.compile(r'^.* >>> \$(?P<atom>.*)\$... .*$')
     return tuple(
-        mo.group('atom')
+        atom.group('atom')
         for line in stdout.splitlines()
-        if (mo := atom_re.match(line.decode()))
+        if (atom := atom_re.match(line.decode()))
     )
 
 

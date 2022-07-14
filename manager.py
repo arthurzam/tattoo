@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 
 import asyncio
+import logging
 import os
 
-from db import DB
-import messages
 import bugs_fetcher
+import messages
+from db import DB
 from sdnotify import sdnotify, set_logging_format, socket_activated_server
-
-import logging
 
 workers: dict[messages.Worker, asyncio.StreamWriter] = {}
 workers_status: dict[messages.Worker, asyncio.Future] = {}
@@ -25,7 +24,7 @@ async def process_bugs(job: messages.GlobalJob):
 
 async def do_scan(trigger: str):
     logging.info('started %s scan for new bugs', trigger)
-    for worker, bugs in bugs_fetcher.collect_bugs([], *workers.keys()):
+    for worker, bugs in bugs_fetcher.collect_bugs((), *workers.keys()):
         if bugs := list(db.filter_not_tested(worker.canonical_arch(), frozenset(bugs))):
             logging.info('sent to %s bugs %s', worker.name, bugs)
             workers[worker].write(messages.dump(messages.GlobalJob(priority=100, bugs=bugs)))
