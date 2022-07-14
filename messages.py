@@ -66,4 +66,4 @@ def load(data: bytes):
     return pickle.loads(base64.b64decode(data.removesuffix(b'\n')))
 
 
-socket_filename = 'tattoo.socket'
+SOCKET_FILENAME = 'tattoo.socket'

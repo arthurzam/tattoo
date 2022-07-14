@@ -1,0 +1,11 @@
+# /etc/systemd/system/tattoo.socket
+[Unit]
+Description=tattoo's main manager
+
+[Socket]
+ListenStream=/srv/tattoo/tattoo.socket
+SocketMode=0666
+RemoveOnStop=true
+
+[Install]
+WantedBy=sockets.target

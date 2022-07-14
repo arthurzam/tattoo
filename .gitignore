@@ -1,10 +1,11 @@
-*.socket
-*.db
-*.pyc
-*.pyo
-.ropeproject
+tattoo.socket
+tattoo.db
+
 controller.datetime.txt
 ssh_config
 
+*.pyc
+*.pyo
+.ropeproject
 .mypy_cache
 __pycache__

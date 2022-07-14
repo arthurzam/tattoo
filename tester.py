@@ -187,7 +187,7 @@ def queue_append_bugs(queue: BugsQueue, worker: messages.Worker, job: messages.G
 
 
 async def handler(worker: messages.Worker, jobs_count: int):
-    reader, writer = await asyncio.open_unix_connection(path=messages.socket_filename)
+    reader, writer = await asyncio.open_unix_connection(path=messages.SOCKET_FILENAME)
     def writer_func(obj: Any):
         writer.write(messages.dump(obj))
         return writer.drain()
@@ -237,8 +237,8 @@ def main():
                         help="Amount of simultaneous testing jobs")
     options = parser.parse_args()
 
-    if not os.path.exists(messages.socket_filename):
-        logging.error("%s socket doesn't exist", messages.socket_filename)
+    if not os.path.exists(messages.SOCKET_FILENAME):
+        logging.error("%s socket doesn't exist", messages.SOCKET_FILENAME)
         return
 
     os.makedirs(testing_dir, exist_ok=True)

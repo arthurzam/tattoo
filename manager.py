@@ -6,7 +6,7 @@ import os
 from db import DB
 import messages
 import bugs_fetcher
-from sdnotify import sdnotify, set_logging_format
+from sdnotify import sdnotify, set_logging_format, socket_activated_server
 
 import logging
 
@@ -130,10 +130,7 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
 
 async def main():
     try:
-        if os.path.exists(messages.socket_filename):
-            os.remove(messages.socket_filename)
-        server = await asyncio.start_unix_server(handler, path=messages.socket_filename)
-        os.chmod(messages.socket_filename, 0o666)
+        server = await socket_activated_server(handler, messages.SOCKET_FILENAME)
         sdnotify('READY=1')
         asyncio.ensure_future(auto_scan())
         await server.serve_forever()
