@@ -72,6 +72,14 @@ was kind enough to decide on the name "tattoo", which came from combining
         `tattoo.socket` is created (so it can communicate).
 3. Check that the `manager` logs all containers connecting to it.
 
+## Load manager on local machine
+
+If you want to run `manager` and `tester`s on local machine, you of course
+don't need SSH to connect to host. Setup locally similarly to above setup,
+and then symlink the `tattoo.socket` into `/tmp/tattoo/comm/[name]`.
+
+NOTE: connect & disconnect won't touch this symlink.
+
 ## Control from developer's own machine
 
 1. Connect to remote servers listed in `ssh_config` using `./controller.py -c`.
