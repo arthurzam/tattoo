@@ -26,6 +26,10 @@ As root on host system:
    Here `300%` represents maximum load of 3 cores. You can do `1600%` for max
    16 cores. For more info read `man 5 systemd.resource-control`.
 7. Copy the `manager.service` into `/etc/systemd/system/tattoo.service`
+8. (Optional) To use systemd socket activation, copy `manager.socket` into
+   `/etc/systemd/system/tattoo.socket`, and enable it by running:
+   `systemctl enable tattoo.socket`. On first access to this socket, it wil
+   auto start the manager.
 
 Open a shell in each container:
 
@@ -38,7 +42,7 @@ Open a shell in each container:
 
 All those commands are from the host system - all of them need root.
 
-- Starting the manager:
+- Starting the manager (if not using socket activation):
 
   `systemctl start tattoo.service`
 - Starting a tester in container named `amd64-stable`:
