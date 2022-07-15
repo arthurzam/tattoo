@@ -29,11 +29,13 @@ comm_dir = base_dir / 'comm'
 fetch_datetime_file = Path.cwd() / 'controller.datetime.txt'
 
 
-def collect_ssh_hosts() -> Iterator[str]:
+def collect_ssh_hosts() -> tuple[str, ...]:
     with open(Path.cwd() / 'ssh_config', encoding='utf8') as file:
-        for row in file:
-            if row.startswith('Host '):
-                yield row.removeprefix('Host ').strip()
+        return tuple(
+            row.removeprefix('Host ').strip()
+            for row in file
+            if row.startswith('Host ')
+        )
 
 
 def read_fetch_datetimes() -> dict[str, datetime]:
@@ -66,12 +68,14 @@ async def run_ssh(*extra_args) -> bool:
 
 
 async def connect():
+    hosts = collect_ssh_hosts()
     os.makedirs(comm_dir, exist_ok=True)
-    for existing in comm_dir.iterdir():
-        existing.unlink()
     os.makedirs(base_dir / 'control', exist_ok=True)
+    for existing in comm_dir.iterdir():
+        if existing.name in hosts:
+            existing.unlink()
     result = await asyncio.gather(*(
-        run_ssh('-fNM', host) for host in collect_ssh_hosts()
+        run_ssh('-fNM', host) for host in hosts
     ))
     if not all(result):
         logging.error("connect() failed")
@@ -79,10 +83,11 @@ async def connect():
 
 async def disconnect():
     logging.info("disconnecting")
+    hosts = collect_ssh_hosts()
     await asyncio.gather(*(
-        run_ssh('-O', 'exit', host) for host in collect_ssh_hosts()
+        run_ssh('-O', 'exit', host) for host in hosts
     ))
-    for host in collect_ssh_hosts():
+    for host in hosts:
         (comm_dir / host).unlink(missing_ok=True)
         (base_dir / 'control' / host).unlink(missing_ok=True)
 
