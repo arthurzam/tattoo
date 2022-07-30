@@ -65,21 +65,23 @@ def parse_report_file(report_file: Path) -> Iterator[dict[str, str]]:
             run[key.strip()] = value.strip()
     if len(run) != 0:
         yield run
-        run = {}
 
 
-def collect_failures(report_file: Path) -> Iterator[str]:
-    for run in parse_report_file(report_file):
+def collect_failure_text(report_file: Path) -> str:
+    report = tuple(parse_report_file(report_file))
+    failures: list[str] = []
+    for run in report:
         if run.get('result', '').lower() != 'true':
             atom = run['atom']
             if failure_str := run.get('failure_str', None):
-                yield f'   {atom} special fail: {failure_str}'
+                failures.append(f'   {atom} special fail: {failure_str}')
             elif 'test' in run['features']:
-                yield f'   {atom} test run failed'
+                failures.append(f'   {atom} test run failed')
             elif useflags := run['useflags']:
-                yield f'   {atom} USE flag run failed: [{useflags}]'
+                failures.append(f'   {atom} USE flag run failed: [{useflags}]')
             else:
-                yield f'   {atom} default USE failed'
+                failures.append(f'   {atom} default USE failed')
+    return f"fail ({len(failures)} fails / {len(report)} runs):\n" + "\n".join(failures)
 
 
 def preexec():
@@ -123,7 +125,7 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
         )
         if 0 != await proc.wait():
             await writer(messages.BugJobDone(bug_number=bug_no, success=False))
-            return 'fail\n' + '\n'.join(collect_failures(testing_dir / f'{bug_no}.report'))
+            return collect_failure_text(testing_dir / f'{bug_no}.report')
         await writer(messages.BugJobDone(bug_number=bug_no, success=True))
         return ''
     finally:
