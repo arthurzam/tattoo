@@ -1,12 +1,14 @@
-from datetime import datetime
-from typing import FrozenSet
+import os
 import sqlite3
+from datetime import datetime
+from pathlib import Path
+from typing import FrozenSet
 
 import messages
 
 
-class DB():
-    db_file = 'tattoo.db'
+class DB:
+    db_file = Path(os.getenv("STATE_DIRECTORY", os.getcwd())) / "tattoo.db"
 
     def __init__(self) -> None:
         results_tables = """
