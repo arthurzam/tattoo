@@ -8,7 +8,7 @@ import subprocess
 from argparse import ArgumentError, ArgumentParser
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import messages
 from sdnotify import set_logging_format
@@ -41,8 +41,8 @@ def collect_ssh_hosts() -> tuple[str, ...]:
 def read_fetch_datetimes() -> dict[str, datetime]:
     res = {}
     with contextlib.suppress(Exception):
-        with fetch_datetime_file.open() as f:
-            for line in f:
+        with fetch_datetime_file.open() as file:
+            for line in file:
                 with contextlib.suppress(Exception):
                     system, datetime_s = line.rstrip('\n').split('=', maxsplit=1)
                     res[system] = datetime.fromisoformat(datetime_s)
@@ -147,7 +147,7 @@ def apply_passes(passes: list[tuple[int, str]]):
                 logging.error("failed to apply for %d,%s", bug_no, arch, exc_info=exc)
 
 
-async def handler(socket_file: Path):
+async def manager_communicate(socket_file: Path):
     if not socket_file.exists():
         logging.error("No such socket %s", socket_file)
         return
@@ -232,7 +232,7 @@ async def main():
     if OPTIONS.connect:
         await connect()
 
-    await asyncio.gather(*map(handler, comm_dir.iterdir()))
+    await asyncio.gather(*map(manager_communicate, comm_dir.iterdir()))
 
     if OPTIONS.action == 'fetch' and not OPTIONS.fetch_dryrun and HAVE_NATTKA:
         if fetch_bugs_passed and OPTIONS.fetch_apply and OPTIONS.fetch_repo:
@@ -254,7 +254,7 @@ async def main():
                 print('|   |')
                 print(f'|   +-- Queue (size {len(tester_status.bugs_queue)})')
                 if tester_status.bugs_queue:
-                    print(f'        {", ".join(map(str, tester_status.bugs_queue[:7]))}')
+                    print(f'|   |   {", ".join(map(str, tester_status.bugs_queue[:7]))}')
                 print('|   +-- Running emerge jobs')
                 if tester_status.merging_atoms:
                     print('|       |')
