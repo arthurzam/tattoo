@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import itertools
 import logging
 import os
 import subprocess
@@ -27,6 +28,12 @@ except ImportError:
 base_dir = Path('/tmp/tattoo')
 comm_dir = base_dir / 'comm'
 fetch_datetime_file = Path.cwd() / 'controller.datetime.txt'
+
+
+def chunks(iterable, size):
+    iterator = iter(iterable)
+    while chunk := tuple(itertools.islice(iterator, size)):
+        yield chunk
 
 
 def collect_ssh_hosts() -> tuple[str, ...]:
@@ -103,7 +110,12 @@ def apply_passes(passes: list[tuple[int, str]]):
 
     divided = {bug_no: frozenset(a for x, a in passes if x == bug_no) for bug_no, _ in passes}
 
-    for bug_no, bug in nattka_bugzilla.find_bugs(bugs=divided.keys()).items():
+    bugs_info = itertools.chain.from_iterable(
+        nattka_bugzilla.find_bugs(bugs=bugs).items()
+        for bugs in chunks(divided.keys(), 40)
+    )
+
+    for bug_no, bug in bugs_info:
         bug_cc = list(arches_from_cc(bug.cc, repo.known_arches))
         for arch in divided[bug_no]:
             if arch not in bug_cc:
@@ -142,8 +154,8 @@ def apply_passes(passes: list[tuple[int, str]]):
                     logging.info("processed %d,%s", bug_no, arch)
                     for a in to_remove:
                         bug_cc.remove(a)
-            except PackageListDoneAlready as exc:
-                logging.warning("skipping %d,%s as it was already done", bug_no, arch, exc_info=exc)
+            except PackageListDoneAlready:
+                logging.warning("skipping %d,%s as it was already done", bug_no, arch)
             except Exception as exc:
                 logging.error("failed to apply for %d,%s", bug_no, arch, exc_info=exc)
 
