@@ -3,7 +3,14 @@ from nattka.bugzilla import BugCategory, BugInfo, NattkaBugzilla
 
 import messages
 
-nattka_bugzilla = NattkaBugzilla(api_key=None)
+def read_api_key():
+    try:
+        with open('bugs.key', encoding='utf-8') as f:
+            return f.read().strip()
+    except Exception:
+        return None
+
+nattka_bugzilla = NattkaBugzilla(api_key=read_api_key())
 
 def is_ready(bug: BugInfo) -> bool:
     if bug.resolved:

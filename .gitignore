@@ -3,6 +3,7 @@ tattoo.db
 
 controller.datetime.txt
 ssh_config
+bugs.key
 
 *.pyc
 *.pyo
