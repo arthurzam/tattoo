@@ -50,27 +50,28 @@ def read_fetch_datetimes() -> dict[str, datetime]:
 
 
 async def run_ssh(*extra_args) -> bool:
+    cmd_args = ('ssh', '-F', 'ssh_config', '-T', *extra_args)
     try:
-        logging.info("running 'ssh -F ssh_config -T %s'", ' '.join(extra_args))
+        logging.info("running %r", ' '.join(cmd_args))
         proc = await asyncio.create_subprocess_exec(
-            'ssh', '-F', 'ssh_config', '-T', *extra_args,
+            *cmd_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             preexec_fn=os.setpgrp,
         )
         stdout, _ = await proc.communicate()
         if 0 != proc.returncode:
-            logging.error("running 'ssh -F ssh_config -T %s' failed with:\n%s", ' '.join(extra_args), stdout.decode('utf8'))
+            logging.error("running %r failed with:\n%s", ' '.join(cmd_args), stdout.decode('utf8'))
         return 0 == proc.returncode
     except Exception as exc:
-        logging.error("running 'ssh -F ssh_config -T %s' failed", ' '.join(extra_args), exc_info=exc)
+        logging.error("running %r failed", ' '.join(cmd_args), exc_info=exc)
         return False
 
 
 async def connect():
     hosts = collect_ssh_hosts()
-    os.makedirs(comm_dir, exist_ok=True)
-    os.makedirs(base_dir / 'control', exist_ok=True)
+    comm_dir.mkdir(parents=True, exist_ok=True)
+    (base_dir / 'control').mkdir(parents=True, exist_ok=True)
     for existing in comm_dir.iterdir():
         if existing.name in hosts:
             existing.unlink()
