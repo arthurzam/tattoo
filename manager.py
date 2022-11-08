@@ -103,7 +103,7 @@ async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                     writer.write(messages.dump(db.get_reportes(data.since)))
                     await writer.drain()
                 elif isinstance(data, messages.DoScan):
-                    asyncio.ensure_future(do_scan("manuel"))
+                    asyncio.ensure_future(do_scan("manual"))
                 elif isinstance(data, messages.TesterStatus):
                     workers_status.pop(worker).set_result(data)
                 elif isinstance(data, messages.GetStatus):
