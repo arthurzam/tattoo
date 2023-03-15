@@ -28,7 +28,7 @@ class IrkerSender(asyncio.DatagramProtocol):
 
     def __init__(self, identifier: str, bugno: int, msg: str):
         irker_spigot = f"ircs://irc.libera.chat:6697/{IrkerSender.IRC_CHANNEL}"
-        message = f"\x0314[{identifier}]: \x0305bug #{bugno}\x0F - {msg}"
+        message = f"\x0314[{identifier}]: \x0307bug #{bugno}\x0F - {msg}"
         self.message = json.dumps({"to": irker_spigot, "privmsg": message}).encode("utf8")
 
     def connection_made(self, transport):
