@@ -1,0 +1,5 @@
+dev-lang/python ssl xml
+dev-ml/* ocamlopt
+
+# for tests
+dev-python/pillow jpeg jpeg2k lcms tiff truetype
