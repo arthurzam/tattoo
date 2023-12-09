@@ -1,0 +1,3 @@
+dev-haskell/* profile
+dev-lang/perl ithreads
+*/* bootstrap
