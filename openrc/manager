@@ -1,0 +1,15 @@
+#!/sbin/openrc-run
+
+name="tattoo manager"
+directory="/srv/tattoo"
+command="/usr/bin/python"
+command_args="/srv/tattoo/manager.py"
+command_background="yes"
+
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.err"
+
+depend() {
+	need irkerd
+}

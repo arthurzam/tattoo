@@ -1,0 +1,14 @@
+#!/sbin/openrc-run
+
+name="tattoo [worker-name]"
+command="[path]/mount.sh"
+command_args="[worker-name] --chdir /srv/tattoo /usr/bin/python /srv/tattoo/tester.py -n [worker-name] -a [arch] -j [jobs]"
+command_background="yes"
+
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.err"
+
+depend() {
+	need tattoo
+}

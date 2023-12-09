@@ -1,0 +1,10 @@
+tattoo-connect() {
+    if [[ ${1} =~ "x86" ]]; then
+        execer="linux32"
+    fi
+
+    pid=$(sed -nE '/child-pid/s/^[^0-9]*([0-9]+)[^0-9]*$/\1/p' "${HOME}/${1}.json")
+    sudo nsenter -t ${pid} -F -i -n -p -C -u -m ${execer} /bin/bash
+}
+
+complete -W "x86-stable x86-testing amd64-stable" tattoo-connect
