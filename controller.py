@@ -18,8 +18,8 @@ set_logging_format()
 
 try:
     from nattka.bugzilla import BugCategory, NattkaBugzilla, arches_from_cc
-    from nattka.git import GitWorkTree, git_commit
-    from nattka.package import (PackageListDoneAlready, add_keywords,
+    from nattka.git import GitWorkTree, GitCommitNoChanges, git_commit
+    from nattka.package import (PackageListDoneAlready, KeywordNoneLeft, add_keywords,
                                 find_repository, match_package_list)
     HAVE_NATTKA = True
 except ImportError:
@@ -154,7 +154,7 @@ def apply_passes(passes: list[tuple[int, str]]):
                     logging.info("processed %d,%s", bug_no, arch)
                     for a in to_remove:
                         bug_cc.remove(a)
-            except PackageListDoneAlready:
+            except (PackageListDoneAlready, GitCommitNoChanges, KeywordNoneLeft):
                 logging.warning("skipping %d,%s as it was already done", bug_no, arch)
             except Exception as exc:
                 logging.error("failed to apply for %d,%s", bug_no, arch, exc_info=exc)
