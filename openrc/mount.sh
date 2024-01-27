@@ -15,12 +15,12 @@ fi
         --bind /srv/tattoo /srv/tattoo \
         --ro-bind /var/db/repos/gentoo /var/db/repos/gentoo \
         --ro-bind /etc/resolv.conf /etc/resolv.conf \
-        --dev /dev \
+        --dev-bind /dev dev \
         --proc /proc \
         --perms 1777 --tmpfs /dev/pts \
         --perms 1777 --tmpfs /dev/shm \
         --perms 1777 --tmpfs /tmp \
-        --perms 1777 --tmpfs /run \
+        --perms 0755 --tmpfs /run \
         --info-fd 11 \
 $@) \
         11>${HOME}/${name}.json
