@@ -1,6 +1,0 @@
-#!/bin/bash
-## Clean-up the keywordfile 
-rm @@KEYWORDFILE@@
-
-# Remove all files associated to the job:
-rm -f @@JOB@@-*

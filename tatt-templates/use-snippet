@@ -1,1 +1,0 @@
-@@USE@@ tatt_test_pkg "@@CPV@@" || test_ret=1

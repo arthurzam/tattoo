@@ -20,7 +20,9 @@ from bugs_queue import BugsQueue, BugsQueueItem
 from sdnotify import sdnotify, set_logging_format
 
 testing_dir = Path('/tmp/run')
-failure_collection_dir = Path.home() / 'logs/failures'
+logs_dir = Path.home() / 'logs'
+failure_collection_dir = logs_dir / 'failures'
+pkgdev_template = str(Path(__file__).parent / 'pkgdev.tatt.template.sh')
 
 
 class IrkerSender(asyncio.DatagramProtocol):
@@ -90,9 +92,18 @@ def preexec():
 
 
 async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
-    logging.info('testing %d - tatt', bug_no)
+    logging.info('testing %d - pkgdev tatt', bug_no)
+    args = (
+        f'--bug={bug_no}',
+        '--job-name={BUGNO}',
+        f'--template-file={pkgdev_template}',
+        f"--logs-dir={str(logs_dir)}",
+        "--emerge-opts=--autounmask-keep-keywords=y --autounmask-use=y --autounmask-continue --autounmask-write",
+    )
+    if key := bugs_fetcher.read_api_key():
+        args += ('--api-key', key)
     proc = await asyncio.create_subprocess_exec(
-        'tatt', '-b', str(bug_no), '-j', str(bug_no),
+        'pkgdev', 'tatt', *args,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         preexec_fn=preexec,
@@ -101,7 +112,7 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
     try:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60)
     except asyncio.TimeoutError:
-        logging.error('`tatt -b %d` timed out', bug_no)
+        logging.error('`pkgdev tatt -b %d` timed out', bug_no)
         return 'tatt timed out'
     if proc.returncode != 0:
         try:
@@ -109,15 +120,15 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
                 logging.error('failed with `tatt -b %d` - bugzilla rate limit', bug_no)
                 return 'tatt failed with bugzilla rate'
             (dst_failure := failure_collection_dir / f'{bug_no}.tatt-failure.log').write_bytes(stdout)
-            logging.error('failed with `tatt -b %d` - log saved at %s', bug_no, dst_failure)
+            logging.error('failed with `pkgdev tatt -b %d` - log saved at %s', bug_no, dst_failure)
         except Exception as exc:
-            logging.error('failed with `tatt -b %d`, but saving log to file failed', exc_info=exc)
+            logging.error('failed with `pkgdev tatt -b %d`, but saving log to file failed', exc_info=exc)
         return 'tatt failed'
 
     try:
         logging.info('testing %d - test run', bug_no)
         proc = await asyncio.create_subprocess_exec(
-            testing_dir / f'{bug_no}-useflags.sh',
+            testing_dir / f'{bug_no}.sh',
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             preexec_fn=preexec,
@@ -131,7 +142,7 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
     finally:
         logging.info('testing %d - cleanup', bug_no)
         proc = await asyncio.create_subprocess_exec(
-            f'/tmp/run/{bug_no}-cleanup.sh',
+            testing_dir / f'{bug_no}.sh', '--clean',
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             preexec_fn=preexec,

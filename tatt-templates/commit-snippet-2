@@ -1,7 +1,0 @@
-# Code for checking consistency of @@EBUILD@@
-pushd @@CP@@ > /dev/null
-
-repoman -d full || exit 1
-repoman -m "@@CP@@: ${DESCR}" commit || exit 1
-
-popd > /dev/null
