@@ -3,5 +3,6 @@ app-portage/nattka
 app-portage/tatt
 app-shells/bash-completion
 app-text/wgetpaste
+dev-python/jinja
 dev-util/pkgdev
 sys-process/htop
