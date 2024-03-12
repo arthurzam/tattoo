@@ -2,6 +2,7 @@ app-editors/vim
 app-portage/nattka
 app-portage/tatt
 app-shells/bash-completion
+app-text/ansifilter
 app-text/wgetpaste
 dev-python/jinja
 dev-util/pkgdev
