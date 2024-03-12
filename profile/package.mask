@@ -1,0 +1,6 @@
+# (tattoo) mask kernels: takes a lot of CPU and disk space, can't really test them in AT
+sys-kernel/gentoo-kernel
+sys-kernel/gentoo-kernel-bin
+sys-kernel/gentoo-sources
+virtual/dist-kernel
+virtual/linux-sources
