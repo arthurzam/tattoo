@@ -4,6 +4,7 @@ tattoo.db
 controller.datetime.txt
 ssh_config
 bugs.key
+pkgdev.tattoo.conf
 
 *.pyc
 *.pyo

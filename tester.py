@@ -101,7 +101,9 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
         "--emerge-opts=--autounmask-keep-keywords=y --autounmask-use=y --autounmask-continue --autounmask-write",
     )
     if key := bugs_fetcher.read_api_key():
-        args += ('--api-key', key)
+        args += (f'--api-key={key}', )
+    if (conf := Path(__file__).parent / 'pkgdev.tattoo.conf').exists():
+        args += (f'--config={str(conf)}', )
     proc = await asyncio.create_subprocess_exec(
         'pkgdev', 'tatt', *args,
         stdout=subprocess.PIPE,
