@@ -67,42 +67,51 @@ tatt_pkg_error() {
     fi
 }
 
+tattoo_emerge() {
+    emerge "$@" {{ emerge_opts }} 2>&1 1>${EMERGE_OUTPUT:?}
+}
+
 tatt_test_pkg() {
     echo >> "{{ report_file }}"
     echo "---" >> "{{ report_file }}"
     echo "time: $(date -u +"%Y-%m-%d %H:%M:%S")" >> "{{ report_file }}"
-    echo "atom: ${1}" >> "{{ report_file }}"
+    echo "atom: ${1:?}" >> "{{ report_file }}"
     echo "useflags: ${TUSE}" >> "{{ report_file }}"
 
     local CP=${1#=}
     CP=${CP/\//_}
 
+    local EMERGE_OUTPUT=/dev/null
+    if [[ -t 1 ]]; then
+        EMERGE_OUTPUT=/dev/tty
+    fi
+
     if [[ ${2} == "--test" ]]; then
         # Do a first pass to avoid circular dependencies
         # --onlydeps should mean we're avoiding (too much) duplicate work
-        USE="minimal -doc" emerge --onlydeps -q1 --with-test-deps {{ emerge_opts }} "${1:?}"
+        USE="minimal -doc" tattoo_emerge "${1}" --onlydeps --quiet yes --oneshot --with-test-deps
 
-        if ! emerge --onlydeps -q1 --with-test-deps {{ emerge_opts }} "${1:?}"; then
+        if ! tattoo_emerge "${1}" --onlydeps --quiet yes --oneshot --with-test-deps; then
             tatt_json_report_error "merging test dependencies failed"
             return 1
         fi
-        printf "%s pkgdev_tatt_{{ job_name }}_test\n" "${1:?}"> "/etc/portage/package.env/pkgdev_tatt_{{ job_name }}/${CP}"
+        printf "%s pkgdev_tatt_{{ job_name }}_test\n" "${1}"> "/etc/portage/package.env/pkgdev_tatt_{{ job_name }}/${CP}"
         echo "features: test" >> "{{ report_file }}"
     else
-        printf "%s pkgdev_tatt_{{ job_name }}_no_test\n" "${1:?}" > "/etc/portage/package.env/pkgdev_tatt_{{ job_name }}/${CP}"
+        printf "%s pkgdev_tatt_{{ job_name }}_no_test\n" "${1}" > "/etc/portage/package.env/pkgdev_tatt_{{ job_name }}/${CP}"
         echo "features: " >> "{{ report_file }}"
     fi
     {% for env in extra_env_files %}
     printf "%s {{env}}\n" "${1}" >> "/etc/portage/package.env/pkgdev_tatt_{{ job_name }}/${CP}"
     {% endfor %}
 
-    printf "%s %s\n" "${1:?}" "${TUSE}" > "/etc/portage/package.use/pkgdev_tatt_{{ job_name }}/${CP}"
+    printf "%s %s\n" "${1}" "${TUSE}" > "/etc/portage/package.use/pkgdev_tatt_{{ job_name }}/${CP}"
 
     # --usepkg-exclude needs the package name, so let's extract it
     # from the atom we have
-    local name=$( pquery --no-version "${1:?}" )
+    local name=$( pquery --no-version "${1}" )
 
-    eout=$( emerge "${1:?}" -1 --getbinpkg=n --usepkg-exclude="${name}" {{ emerge_opts }} 2>&1 1>/dev/tty )
+    eout=$( tattoo_emerge "${1}" --oneshot --getbinpkg=n --usepkg-exclude="${name}" )
     local RES=$?
 
     rm -v -f /etc/portage/package.{env,use}/pkgdev_tatt_{{ job_name }}/${CP}
