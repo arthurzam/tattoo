@@ -68,7 +68,7 @@ async def auto_scan():
         if any(t.bugs_queue for t in status.testers.values()):
             logging.warning("Self scan skipped because tester's queues aren't empty")
             continue
-        while (load := 100 * os.getloadavg()[0] / os.cpu_count()) > 50:
+        while (load := 100 * os.getloadavg()[0] / (os.cpu_count() or 1)) > 50:
             logging.warning("Self scan postponed because of high load (%.2f%%)", load)
             await asyncio.sleep(1200) # 20m = 20 * 60s
 

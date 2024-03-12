@@ -54,7 +54,7 @@ class TesterStatus(NamedTuple):
 
 class ManagerStatus(NamedTuple):
     load: tuple[float, float, float]
-    cpu_count: int
+    cpu_count: int | None
     testers: dict[Worker, TesterStatus]
 
 
