@@ -90,8 +90,12 @@ tatt_test_pkg() {
         # Do a first pass to avoid circular dependencies
         # --onlydeps should mean we're avoiding (too much) duplicate work
         USE="minimal -doc" tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps
+        # Run it again with --usepkg=n because of a --with-test-deps quirk (bug #639588)
+        USE="minimal -doc" tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps --usepkg=n
 
-        if ! tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps; then
+        tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps
+        # Run it again with --usepkg=n because of a --with-test-deps quirk (bug #639588)
+        if ! tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps --usepkg=n; then
             tatt_json_report_error "merging test dependencies failed"
             return 1
         fi
