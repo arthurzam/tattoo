@@ -28,7 +28,7 @@ def check_bug(bug: BugInfo, depends_bugs: dict[int, BugInfo], worker: messages.W
             if dep.category not in (BugCategory.KEYWORDREQ, BugCategory.STABLEREQ):
                 # if not another keyword/stable request, then it has a blocker bug
                 return False
-            if not dep.sanity_check:
+            if not dep.sanity_check or "CC-ARCHES" not in dep.keywords:
                 # if the blocker is not ready, then this one is also not ready
                 return False
             if worker.canonical_arch() in (cc.removesuffix('@gentoo.org') for cc in dep.cc):
