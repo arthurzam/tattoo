@@ -1,5 +1,6 @@
-dev-lang/python ssl xml
+dev-lang/python sqlite ssl xml
 dev-ml/* ocamlopt
+sys-devel/gcc fortran openmp pgo
 
 # for tests
 dev-python/pillow jpeg jpeg2k lcms tiff truetype

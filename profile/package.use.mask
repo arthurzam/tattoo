@@ -1,3 +1,4 @@
 dev-haskell/* profile
-dev-lang/perl ithreads
+dev-lang/perl ithreads minimal
+dev-lang/rust lto
 */* bootstrap
