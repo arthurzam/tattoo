@@ -3,3 +3,4 @@ dev-lang/perl ithreads minimal
 dev-lang/rust lto
 */* build
 */* bootstrap
+*/* vanilla
