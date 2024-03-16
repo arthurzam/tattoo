@@ -44,7 +44,7 @@ was kind enough to decide on the name "tattoo", which came from combining
     arch=arm64
     emergeopts="--autounmask --autounmask-continue --autounmask-write"
     repodir="/var/db/repos/gentoo/"
-    ignoreprefix="elibc_","video_cards_","linguas_","python_targets_","python_single_target_","kdeenablefinal","test","debug","qemu_user_","qemu_softmmu_","libressl","static-libs","systemd","sdjournal","eloginid","doc","ruby_targets_"
+    ignoreprefix="elibc_","video_cards_","linguas_","python_targets_","python_single_target_","kdeenablefinal","test","debug","qemu_user_","qemu_softmmu_","libressl","static-libs","systemd","sdjournal","elogin","doc","ruby_targets_"
     buildlogdir=/root/logs
     rdeps=0
     usecombis=1
