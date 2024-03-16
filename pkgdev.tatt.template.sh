@@ -86,16 +86,16 @@ tatt_test_pkg() {
         EMERGE_OUTPUT=/dev/tty
     fi
 
+    # We run some emerge commands twice here with --usepkg=n because of a
+    # --with-test-deps quirk (bug #639588).
     if [[ ${2} == "--test" ]]; then
         # Do a first pass to avoid circular dependencies
         # --onlydeps should mean we're avoiding (too much) duplicate work
-        USE="minimal -doc" tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps
-        # Run it again with --usepkg=n because of a --with-test-deps quirk (bug #639588)
-        USE="minimal -doc" tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps --usepkg=n
+        USE="minimal -doc" tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps || \
+               USE="minimal -doc" tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps --usepkg=n
 
-        tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps
-        # Run it again with --usepkg=n because of a --with-test-deps quirk (bug #639588)
-        if ! tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps --usepkg=n; then
+        if ! tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps && \
+		! tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps --usepkg=n; then
             tatt_json_report_error "merging test dependencies failed"
             return 1
         fi
