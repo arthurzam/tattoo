@@ -1,6 +1,7 @@
 dev-haskell/* profile
 dev-lang/perl ithreads minimal
 dev-lang/rust lto
+sys-devel/clang-common default-libcxx
 sys-libs/binutils-libs 64-bit-bfd
 */* build
 */* bootstrap
