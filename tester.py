@@ -99,7 +99,7 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
         f'--template-file={pkgdev_template}',
         f"--logs-dir={str(logs_dir)}",
         "--emerge-opts=--autounmask-keep-keywords=y --autounmask-use=y --autounmask-continue --autounmask-write",
-        "--ignore-prefixes=elibc_,video_cards_,linguas_,python_targets_,python_single_target_,kdeenablefinal,test,debug,qemu_user_,qemu_softmmu_,libressl,static-libs,systemd,sdjournal,elogind,doc,ruby_targets_,default-libcxx",
+        "--ignore-prefixes=elibc_,video_cards_,linguas_,python_targets_,python_single_target_,kdeenablefinal,test,debug,qemu_user_,qemu_softmmu_,libressl,static-libs,systemd,sdjournal,elogind,doc,ruby_targets_,default-libcxx,headers-only",
     )
     if key := bugs_fetcher.read_api_key():
         args += (f'--api-key={key}', )
