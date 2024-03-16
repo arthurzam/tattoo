@@ -6,4 +6,5 @@ sys-libs/binutils-libs 64-bit-bfd
 sys-libs/glibc headers-only
 */* build
 */* bootstrap
+*/* debug
 */* vanilla
