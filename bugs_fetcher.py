@@ -43,8 +43,11 @@ def collect_bugs(bugs_no: Iterable[int], *workers: messages.Worker) -> Iterator[
         sanity_check=[True],
         cc={f'{worker.canonical_arch()}@gentoo.org' for worker in workers},
     )
-    all_depends = frozenset().union(*(bug.depends for bug in bugs.values()))
-    depends_bugs = nattka_bugzilla.find_bugs(bugs=all_depends, unresolved=True)
+
+    if all_depends := frozenset().union(*(bug.depends for bug in bugs.values())):
+        depends_bugs = nattka_bugzilla.find_bugs(bugs=all_depends, unresolved=True)
+    else:
+        depends_bugs = {}
 
     for worker in workers:
         if ok_bugs := [bug_no for bug_no, bug in bugs.items() if check_bug(bug, depends_bugs, worker)]:
