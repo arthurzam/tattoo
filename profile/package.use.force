@@ -1,6 +1,6 @@
 dev-lang/python sqlite ssl xml
 dev-ml/* ocamlopt
-sys-devel/gcc fortran openmp objc objc++ objc-gc
+sys-devel/gcc fortran graphite openmp objc objc++ objc-gc
 sys-devel/gcc pgo
 
 # for tests
