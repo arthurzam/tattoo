@@ -8,6 +8,7 @@ import os
 import re
 import signal
 import subprocess
+import warnings
 from argparse import ArgumentParser
 from pathlib import Path
 from random import shuffle
@@ -18,6 +19,13 @@ import bugs_fetcher
 import messages
 from bugs_queue import BugsQueue, BugsQueueItem
 from sdnotify import sdnotify, set_logging_format
+
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    warnings.warn('psutil not found - install "dev-python/psutil"')
+    HAS_PSUTIL = False
 
 testing_dir = Path('/tmp/run')
 logs_dir = Path.home() / 'logs'
@@ -91,6 +99,38 @@ def preexec():
     os.setpgrp()
 
 
+async def monitor_hang_job(pid: int, bug_no: int):
+    """Monitor job's children pids and terminate if they don't change for a while.
+
+    The detection logic is based on the assumption that the job is running emerge,
+    and for 6 hours the children pids didn't change. You can adjust the timeout
+    using the HANG_TIMEOUT_SECS environment variable.
+    In worst scenario, we will have ~12h to detect the hang.
+    """
+    try:
+        if not HAS_PSUTIL:
+            return True
+
+        duration = int(os.getenv('HANG_TIMEOUT_SECS', str(6 * 3600))) # 6h
+
+        await asyncio.sleep(10 * 60) # 10m - initial wait
+        prev_pids = []
+        while True:
+            try:
+                proc = psutil.Process(pid)
+            except psutil.NoSuchProcess:
+                return True
+            children = [p.pid for p in proc.children(recursive=True)]
+            if children == prev_pids:
+                logging.error('job %d is hung', bug_no)
+                proc.terminate()
+                return False
+            prev_pids = children
+            await asyncio.sleep(duration)
+    except asyncio.CancelledError:
+        return True
+
+
 async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
     logging.info('testing %d - pkgdev tatt', bug_no)
     args = (
@@ -137,7 +177,10 @@ async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
             preexec_fn=preexec,
             cwd=testing_dir,
         )
-        if 0 != await proc.wait():
+        monitor = asyncio.create_task(monitor_hang_job(proc.pid, bug_no))
+        exit_code = await proc.wait()
+        monitor.cancel()
+        if exit_code != 0:
             await writer(messages.BugJobDone(bug_number=bug_no, success=False))
             return collect_failure_text(testing_dir / f'{bug_no}.report')
         await writer(messages.BugJobDone(bug_number=bug_no, success=True))
