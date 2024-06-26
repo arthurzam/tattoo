@@ -10,5 +10,39 @@ WorkingDirectory=/srv/tattoo
 ExecStart=/usr/bin/python /srv/tattoo/manager.py
 SyslogIdentifier=tattoo
 
+StateDirectory=tattoo
+User=tattoo
+DynamicUser=yes
+
+# Hardening
+CapabilityBoundingSet=
+LockPersonality=true
+PrivateDevices=yes
+PrivateUsers=yes
+ProcSubset=pid
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+ProtectKernelModules=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SocketBindDeny=any
+SystemCallArchitectures=native
+SystemCallFilter=~@clock
+SystemCallFilter=~@cpu-emulation
+SystemCallFilter=~@debug
+SystemCallFilter=~@module
+SystemCallFilter=~@mount
+SystemCallFilter=~@obsolete
+SystemCallFilter=~@privileged
+SystemCallFilter=~@raw-io
+SystemCallFilter=~@reboot
+SystemCallFilter=~@resources
+SystemCallFilter=~@swap
+UMask=0077
+
 [Install]
 WantedBy=multi-user.target
