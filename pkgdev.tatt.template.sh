@@ -44,13 +44,11 @@ tatt_pkg_error() {
         cp "${BUILDLOG}" "${LOGNAME}"
         echo "log_file: ${LOGNAME}" >> "{{ report_file }}"
         readarray -d '' TESTLOGS < <(find "${BUILDDIR}/work" -iname '*test*log*' -print0)
-{% raw %}
-        if [[ ${#TESTLOGS[@]} -gt 0 ]]; then
+        if [[ {{ "${#TESTLOGS[@]}" }} -gt 0 ]]; then
             tar cf "${LOGNAME}.tar" "${TESTLOGS[@]}"
             echo "extra_logs: ${LOGNAME}.tar" >> "{{ report_file }}"
         fi
     fi
-{% endraw %}
 
     if [[ ${eout} =~ REQUIRED_USE ]] ; then
         tatt_json_report_error "REQUIRED_USE not satisfied (probably)"
