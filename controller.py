@@ -264,8 +264,9 @@ async def main():
         for host, status in statuses.items():
             print(f'{host}:')
             print('|')
-            print(f'+-- CPUs: {status.cpu_count}')
-            print(f'+-- Load: {status.load[0]:.2f} ({100 * status.load[0] / status.cpu_count:.2f}%)')
+            if status.cpu_count:
+                print(f'+-- CPUs: {status.cpu_count}')
+                print(f'+-- Load: {status.load[0]:.2f} ({100 * status.load[0] / status.cpu_count:.2f}%)')
             for tester, tester_status in status.testers.items():
                 print(f'+-- "{tester.name}" of arch {tester.arch}:')
                 print('|   |')
