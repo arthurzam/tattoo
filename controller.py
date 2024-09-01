@@ -245,7 +245,11 @@ async def main():
     if OPTIONS.connect:
         await connect()
 
-    await asyncio.gather(*map(manager_communicate, comm_dir.iterdir()))
+    try:
+        async with asyncio.timeout(8):
+            await asyncio.gather(*map(manager_communicate, comm_dir.iterdir()))
+    except asyncio.TimeoutError:
+        logging.error("Timeout while communicating with managers")
 
     if OPTIONS.action == 'fetch' and not OPTIONS.fetch_dryrun and HAVE_NATTKA:
         if fetch_bugs_passed and OPTIONS.fetch_apply and OPTIONS.fetch_repo:
