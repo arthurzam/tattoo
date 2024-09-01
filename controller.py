@@ -7,7 +7,7 @@ import logging
 import os
 import subprocess
 from argparse import ArgumentError, ArgumentParser
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
@@ -189,7 +189,7 @@ async def manager_communicate(socket_file: Path):
                 statuses[socket_file.name] = data
 
         if OPTIONS.action == 'fetch':
-            now = datetime.utcnow()
+            now = datetime.now(tz=UTC)
             writer.write(messages.dump(messages.CompletedJobsRequest(since=fetch_datetimes.get(socket_file.name, datetime.fromtimestamp(0)))))
             await writer.drain()
             data = messages.load(await reader.readuntil(b'\n'))
