@@ -3,7 +3,7 @@ app-portage/nattka
 app-shells/bash-completion
 app-text/ansifilter
 app-text/wgetpaste
-dev-python/jinja
+dev-python/jinja2
 dev-python/psutil
 dev-util/pkgdev
 sys-process/htop
