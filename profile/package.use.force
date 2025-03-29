@@ -4,4 +4,5 @@ sys-devel/gcc fortran graphite openmp objc objc++ objc-gc
 sys-devel/gcc pgo
 
 # for tests
-dev-python/pillow jpeg jpeg2k lcms tiff truetype
+dev-python/pillow jpeg jpeg2k lcms tiff truetype webp
+xfce-base/xfdesktop wayland
