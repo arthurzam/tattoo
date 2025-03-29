@@ -5,4 +5,4 @@ sys-devel/gcc pgo
 
 # for tests
 dev-python/pillow jpeg jpeg2k lcms tiff truetype webp
-xfce-base/xfdesktop wayland
+xfce-base/* wayland
