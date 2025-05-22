@@ -1,6 +1,7 @@
 dev-haskell/* profile
 dev-lang/perl ithreads minimal
 dev-lang/rust lto
+media-libs/opencv vulkan
 sys-devel/clang-common default-libcxx
 sys-libs/binutils-libs 64-bit-bfd
 sys-libs/glibc headers-only
