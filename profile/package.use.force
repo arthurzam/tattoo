@@ -1,8 +1,10 @@
 dev-lang/python sqlite ssl xml
+dev-lang/python pgo
 dev-ml/* ocamlopt
-sys-devel/gcc fortran graphite openmp objc objc++ objc-gc
+sys-devel/gcc ada d fortran graphite openmp objc objc++ objc-gc
 sys-devel/gcc pgo
 sys-devel/gcc jit
+sys-devel/binutils pgo
 
 # for tests
 dev-python/pillow jpeg jpeg2k lcms tiff truetype webp
