@@ -36,13 +36,13 @@ def chunks(iterable, size):
         yield chunk
 
 
-def collect_ssh_hosts() -> tuple[str, ...]:
+def collect_ssh_hosts() -> set[str]:
     with open(Path.cwd() / 'ssh_config', encoding='utf8') as file:
-        return tuple(
+        return {
             row.removeprefix('Host ').strip()
             for row in file
             if row.startswith('Host ')
-        )
+        }
 
 
 def read_fetch_datetimes() -> dict[str, datetime]:
@@ -75,8 +75,10 @@ async def run_ssh(*extra_args) -> bool:
         return False
 
 
-async def connect():
+async def connect(targets: str):
     hosts = collect_ssh_hosts()
+    if targets != "*":
+        hosts.intersection_update(targets.split(','))
     comm_dir.mkdir(parents=True, exist_ok=True)
     (base_dir / 'control').mkdir(parents=True, exist_ok=True)
     for existing in comm_dir.iterdir():
@@ -89,9 +91,11 @@ async def connect():
         logging.error("connect() failed")
 
 
-async def disconnect():
+async def disconnect(targets: str):
     logging.info("disconnecting")
     hosts = collect_ssh_hosts()
+    if targets != "*":
+        hosts.intersection_update(targets.split(','))
     await asyncio.gather(*(
         run_ssh('-O', 'exit', host) for host in hosts
     ))
@@ -170,17 +174,19 @@ async def manager_communicate(socket_file: Path):
         logging.error("Failed Connect to [%s]", socket_file.name, exc_info=exc)
         return
 
+    def matches_options(options: str|None) -> bool:
+        return bool(options) and (options == '*' or socket_file.name in options.split(','))
+
     try:
         writer.write(messages.dump(messages.Worker(name='', arch='')))
         if OPTIONS.bugs:
             writer.write(messages.dump(messages.GlobalJob(priority=OPTIONS.priority, bugs=OPTIONS.bugs)))
-        if OPTIONS.scan:
-            if OPTIONS.scan == '*' or socket_file.name in OPTIONS.scan.split(','):
-                writer.write(messages.dump(messages.DoScan()))
-                logging.info("Initiated scan for [%s]", socket_file.name)
+        if matches_options(OPTIONS.scan):
+            writer.write(messages.dump(messages.DoScan()))
+            logging.info("Initiated scan for [%s]", socket_file.name)
         await writer.drain()
 
-        if OPTIONS.info:
+        if matches_options(OPTIONS.info):
             writer.write(messages.dump(messages.GetStatus()))
             logging.info("Requesting status for [%s]", socket_file.name)
             await writer.drain()
@@ -208,13 +214,13 @@ async def manager_communicate(socket_file: Path):
 
 def argv_parser() -> ArgumentParser:
     parser = ArgumentParser()
-    parser.add_argument("-c", "--connect", action="store_true",
+    parser.add_argument("-c", "--connect", action="store", const='*', nargs='?',
                         help="Connect to all remote managers at start using ssh_config file")
-    parser.add_argument("-d", "--disconnect", action="store_true",
+    parser.add_argument("-d", "--disconnect", action="store", const='*', nargs='?',
                         help="Disconnect from all remove managers at end")
     parser.add_argument("-s", "--scan", action="store", const='*', nargs='?',
                         help="Run scan for bugs on remote managers (optional comma delimited host list)")
-    parser.add_argument("-i", "--info", action="store_true",
+    parser.add_argument("-i", "--info", action="store", const='*', nargs='?',
                         help="Show info about the connected managers and testers")
     parser.add_argument("-b", "--bugs", nargs='*', type=int,
                         help="Bugs to test")
@@ -243,7 +249,7 @@ statuses: dict[str, messages.ManagerStatus] = {}
 
 async def main():
     if OPTIONS.connect:
-        await connect()
+        await connect(OPTIONS.connect)
 
     try:
         async with asyncio.timeout(8):
@@ -258,7 +264,7 @@ async def main():
             file.writelines((f'{host}={date.isoformat()}\n' for host, date in fetch_datetimes.items()))
 
     if OPTIONS.disconnect:
-        await disconnect()
+        await disconnect(OPTIONS.disconnect)
 
     if OPTIONS.info:
         for host, status in statuses.items():
