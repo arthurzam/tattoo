@@ -5,7 +5,7 @@ Description=tattoo tester for %H
 [Service]
 Type=notify
 WorkingDirectory=/srv/tattoo
-ExecStart=/usr/bin/python /srv/tattoo/tester.py -n %H -a [arch] -j 1
+ExecStart=/usr/bin/python /srv/tattoo/tester.py -n %H
 SyslogIdentifier=tattoo
 KillMode=mixed
 Restart=always
