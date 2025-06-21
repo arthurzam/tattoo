@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import signal
+import socket
 import subprocess
 import warnings
 from argparse import ArgumentParser
@@ -288,17 +289,22 @@ async def handler(worker: messages.Worker, jobs_count: int):
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument("-n", "--name", action="store", required=True,
+    parser.add_argument("-n", "--name", action="store", default=socket.gethostname(),
                         help="name for the tester, easy to identify")
-    parser.add_argument("-a", "--arch", action="store", required=True,
+    parser.add_argument("-a", "--arch", action="store", default=os.getenv('ARCH'),
                         help="Gentoo's arch name. Prepend with ~ for keywording")
-    parser.add_argument("-j", "--jobs", type=int, action="store", default=2,
+    parser.add_argument("-j", "--jobs", type=int, action="store", default=1,
                         help="Amount of simultaneous testing jobs")
     options = parser.parse_args()
+
+    if not options.arch:
+        parser.error("You must specify --arch or set $ARCH environment variable")
 
     if not os.path.exists(messages.SOCKET_FILENAME):
         logging.error("%s socket doesn't exist", messages.SOCKET_FILENAME)
         return
+
+    logging.info('Starting tester %r for arch %r', options.name, options.arch)
 
     os.makedirs(testing_dir, exist_ok=True)
     os.makedirs(failure_collection_dir, exist_ok=True)
