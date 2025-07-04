@@ -68,7 +68,7 @@ cat >> /tmp/make.conf <<-EOF || die "Failed to append to /etc/portage/make.conf"
 	LINGUAS="en"
 	PORTAGE_ELOG_SYSTEM="echo save"
 	PORTAGE_LOGDIR="/var/log/portage"
-	FEATURES="split-elog split-log"
+	FEATURES="${FEATURES} split-elog split-log -merge-sync parallel-install parallel-fetch -news"
 	PORTAGE_LOG_FILTER_FILE_CMD="bash -c \\"ansifilter; exec cat\\""
 EOF
 
