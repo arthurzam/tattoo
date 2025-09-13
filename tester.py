@@ -115,7 +115,7 @@ async def monitor_hang_job(pid: int, bug_no: int):
         duration = int(os.getenv('HANG_TIMEOUT_SECS', str(6 * 3600))) # 6h
 
         await asyncio.sleep(10 * 60) # 10m - initial wait
-        prev_pids = []
+        prev_pids: list[int] = []
         while True:
             try:
                 proc = psutil.Process(pid)
@@ -134,18 +134,18 @@ async def monitor_hang_job(pid: int, bug_no: int):
 
 async def test_run(writer: Callable[[Any], Any], bug_no: int) -> str:
     logging.info('testing %d - pkgdev tatt', bug_no)
-    args = (
+    args = [
         f'--bug={bug_no}',
         '--job-name={BUGNO}',
         f'--template-file={pkgdev_template}',
         f"--logs-dir={str(logs_dir)}",
         "--emerge-opts=--autounmask-keep-keywords=y --autounmask-use=y --autounmask-continue --autounmask-write",
         "--ignore-prefixes=elibc_,video_cards_,linguas_,python_targets_,python_single_target_,kdeenablefinal,test,debug,qemu_user_,qemu_softmmu_,libressl,static-libs,systemd,sdjournal,elogind,doc,ruby_targets_,default-libcxx,headers-only",
-    )
+    ]
     if key := bugs_fetcher.read_api_key():
-        args += (f'--api-key={key}', )
+        args.append(f'--api-key={key}')
     if (conf := Path(__file__).parent / 'pkgdev.tattoo.conf').exists():
-        args += (f'--config={str(conf)}', )
+        args.append(f'--config={str(conf)}')
     proc = await asyncio.create_subprocess_exec(
         'pkgdev', 'tatt', *args,
         stdout=subprocess.PIPE,
