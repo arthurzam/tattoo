@@ -53,7 +53,7 @@ if [[ -d /etc/portage/profile/package.use.force ]]; then
 fi
 ln -vsf /srv/tattoo/profile/* /etc/portage/profile || die "Failed to link profile files"
 
-cat >> /tmp/make.conf <<-EOF || die "Failed to append to /etc/portage/make.conf"
+cat >> /etc/portage/make.conf <<-EOF || die "Failed to append to /etc/portage/make.conf"
 
 	# tattoo settings
 	MAKEOPTS="-j${JOBS} -l${LOAD}"
@@ -71,5 +71,10 @@ cat >> /tmp/make.conf <<-EOF || die "Failed to append to /etc/portage/make.conf"
 	FEATURES="${FEATURES} split-elog split-log -merge-sync parallel-install parallel-fetch -news"
 	PORTAGE_LOG_FILTER_FILE_CMD="bash -c \\"ansifilter; exec cat\\""
 EOF
+
+einfo "Selecting profile"
+eselect profile list
+read -p "enter profile number: " PROFILE_NUM
+eselect profile set "${PROFILE_NUM:?Invalid profile}" || die "Failed to set profile"
 
 einfo "Done! Now perform @world upgrade with emerge"
