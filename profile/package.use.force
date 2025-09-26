@@ -1,5 +1,6 @@
 dev-lang/python sqlite ssl xml
 dev-lang/python pgo
+dev-libs/tree-sitter-bash python
 dev-ml/* ocamlopt
 sys-devel/gcc ada d fortran graphite openmp objc objc++ objc-gc
 sys-devel/gcc pgo
