@@ -39,7 +39,7 @@ ln -vsf /srv/tattoo/systemd/tmpfiles-portage-tmpdir.conf /etc/tmpfiles.d/portage
 einfo "Preparing for simple pkgdev usage"
 ln -vsf /srv/tattoo/bugs.key ~/.bugz_token || die "Failed to link bugs.key to ~/.bugz_token"
 mkdir -p ~/.config/pkgdev/ || die "Failed to create ~/.config/pkgdev directory"
-cat > ~/.config/pkgdev/config <<-EOF || die "Failed to create pkgdev config"
+cat > ~/.config/pkgdev/pkgdev.conf <<-EOF || die "Failed to create pkgdev config"
 	[DEFAULT]
 	tatt.test =
 	tatt.use-combos = 1
