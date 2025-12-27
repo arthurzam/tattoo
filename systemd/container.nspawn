@@ -11,6 +11,7 @@ Bind=/var/cache/distfiles/
 Bind=/srv/tattoo
 BindReadOnly=/usr/src
 #TemporaryFileSystem=/var/tmp
+Bind=/dev/steve
 
 [Network]
 Private=no

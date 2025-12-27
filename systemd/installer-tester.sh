@@ -46,6 +46,11 @@ cat > ~/.config/pkgdev/pkgdev.conf <<-EOF || die "Failed to create pkgdev config
 	tatt.use-default =
 EOF
 
+einfo "Setting initial /etc/sandbox.d/90steve"
+cat > /etc/sandbox.d/90steve <<-EOF || die "Failed to create /etc/sandbox.d/90steve"
+	SANDBOX_WRITE="/dev/steve"
+EOF
+
 einfo "Preparing /etc/portage"
 if [[ -d /etc/portage/profile/package.use.force ]]; then
 	ewarn "Directory /etc/portage/profile/package.use.force already exists, removing it"
@@ -56,7 +61,6 @@ ln -vsf /srv/tattoo/profile/* /etc/portage/profile || die "Failed to link profil
 cat >> /etc/portage/make.conf <<-EOF || die "Failed to append to /etc/portage/make.conf"
 
 	# tattoo settings
-	MAKEOPTS="-j${JOBS} -l${LOAD}"
 	EMERGE_DEFAULT_OPTS="--nospinner --ask-enter-invalid --quiet-build --keep-going --complete-graph --with-bdeps=y --load-average ${EMERGE_LOAD} --deep --jobs=${EMERGE_JOBS}"
 	PORTAGE_IONICE_COMMAND="ionice -c 3 -p \\\${PID}"
 	PORTAGE_NICENESS=11
@@ -70,6 +74,11 @@ cat >> /etc/portage/make.conf <<-EOF || die "Failed to append to /etc/portage/ma
 	PORTAGE_LOGDIR="/var/log/portage"
 	FEATURES="${FEATURES} split-elog split-log -merge-sync parallel-install parallel-fetch -news"
 	PORTAGE_LOG_FILTER_FILE_CMD="bash -c \\"ansifilter; exec cat\\""
+
+	# https://wiki.gentoo.org/wiki/Steve
+	MAKEOPTS="-j${JOBS} -l${LOAD}"
+	MAKEFLAGS="-l${LOAD} --jobserver-auth=fifo:/dev/steve"
+	NINJAOPTS="-l${LOAD}"
 EOF
 
 einfo "Selecting profile"
