@@ -100,6 +100,9 @@ tatt_test_pkg() {
         printf "%s pkgdev_tatt_{{ job_name }}_test\n" "${1}"> "/etc/portage/package.env/pkgdev_tatt_{{ job_name }}/${CP}"
         echo "features: test" >> "{{ report_file }}"
     else
+        # Try to pre-emerge dependencies so that we can make use of getbinpkg
+        # here.
+        tattoo_emerge "${1}" --onlydeps --quiet --oneshot --usepkg-exclude="${name}"
         printf "%s pkgdev_tatt_{{ job_name }}_no_test\n" "${1}" > "/etc/portage/package.env/pkgdev_tatt_{{ job_name }}/${CP}"
         echo "features: " >> "{{ report_file }}"
     fi
