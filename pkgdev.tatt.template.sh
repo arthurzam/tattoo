@@ -96,7 +96,7 @@ tatt_test_pkg() {
         USE="minimal -doc" tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps || \
                USE="minimal -doc" tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps --usepkg=n
 
-        if ! tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps && \
+        if ! tattoo_emerge "${1}" --onlydeps --with-bdeps=y --quiet --oneshot --with-test-deps && \
 		! tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps --usepkg=n; then
             tatt_json_report_error "merging test dependencies failed"
             return 1
@@ -106,7 +106,7 @@ tatt_test_pkg() {
     else
         # Try to pre-emerge dependencies so that we can make use of getbinpkg
         # here.
-        tattoo_emerge "${1}" --onlydeps --quiet --oneshot ${name:+--usepkg-exclude="${name}"}
+        tattoo_emerge "${1}" --onlydeps --with-bdeps=y --quiet --oneshot ${name:+--usepkg-exclude="${name}"}
         printf "%s pkgdev_tatt_{{ job_name }}_no_test\n" "${1}" > "/etc/portage/package.env/pkgdev_tatt_{{ job_name }}/${CP}"
         echo "features: " >> "{{ report_file }}"
     fi
