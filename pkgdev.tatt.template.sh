@@ -106,7 +106,7 @@ tatt_test_pkg() {
     else
         # Try to pre-emerge dependencies so that we can make use of getbinpkg
         # here.
-        tattoo_emerge "${1}" --onlydeps --quiet --oneshot --usepkg-exclude="${name}"
+        tattoo_emerge "${1}" --onlydeps --quiet --oneshot ${name+--usepkg-exclude="${name}"}
         printf "%s pkgdev_tatt_{{ job_name }}_no_test\n" "${1}" > "/etc/portage/package.env/pkgdev_tatt_{{ job_name }}/${CP}"
         echo "features: " >> "{{ report_file }}"
     fi
@@ -116,7 +116,7 @@ tatt_test_pkg() {
 
     printf "%s %s\n" "${1}" "${TUSE}" > "/etc/portage/package.use/pkgdev_tatt_{{ job_name }}/${CP}"
 
-    eout=$( tattoo_emerge "${1}" --oneshot --getbinpkg=n --usepkg-exclude="${name}" )
+    eout=$( tattoo_emerge "${1}" --oneshot --getbinpkg=n ${name+--usepkg-exclude="${name}"} )
     local RES=$?
 
     rm -v -f /etc/portage/package.{env,use}/pkgdev_tatt_{{ job_name }}/${CP}
