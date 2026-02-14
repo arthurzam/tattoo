@@ -84,6 +84,10 @@ tatt_test_pkg() {
         EMERGE_OUTPUT=/dev/tty
     fi
 
+    # --usepkg-exclude needs the package name, so let's extract it
+    # from the atom we have
+    local name=$( pquery --no-version "${1}" )
+
     # We run some emerge commands twice here with --usepkg=n because of a
     # --with-test-deps quirk (bug #639588).
     if [[ ${2} == "--test" ]]; then
@@ -111,10 +115,6 @@ tatt_test_pkg() {
     {% endfor %}
 
     printf "%s %s\n" "${1}" "${TUSE}" > "/etc/portage/package.use/pkgdev_tatt_{{ job_name }}/${CP}"
-
-    # --usepkg-exclude needs the package name, so let's extract it
-    # from the atom we have
-    local name=$( pquery --no-version "${1}" )
 
     eout=$( tattoo_emerge "${1}" --oneshot --getbinpkg=n --usepkg-exclude="${name}" )
     local RES=$?
