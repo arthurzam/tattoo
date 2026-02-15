@@ -72,7 +72,7 @@ cat >> /etc/portage/make.conf <<-EOF || die "Failed to append to /etc/portage/ma
 	LINGUAS="en"
 	PORTAGE_ELOG_SYSTEM="echo save"
 	PORTAGE_LOGDIR="/var/log/portage"
-	FEATURES="${FEATURES} split-elog split-log -merge-sync parallel-install parallel-fetch -news"
+	FEATURES="\${FEATURES} split-elog split-log -merge-sync parallel-install parallel-fetch -news"
 	PORTAGE_LOG_FILTER_FILE_CMD="bash -c \\"ansifilter; exec cat\\""
 
 	# https://wiki.gentoo.org/wiki/Steve
