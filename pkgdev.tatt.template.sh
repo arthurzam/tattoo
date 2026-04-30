@@ -92,7 +92,7 @@ tatt_test_pkg() {
     # If one happens to set EMERGE_DEFAULT_OPTS="--buildpkg", exclude it for the tested pkg (which is
     # ACCEPT_KEYWORDS, and built several times).
     local name=$( pquery --raw --no-version "${1}" )
-    local commonopts=( --oneshot --usepkg-exclude="${name}" )
+    local commonopts=( --oneshot --usepkg-exclude="${name}" --buildpkg-exclude="${name}" )
 
     if [[ ${2} == "--test" ]]; then
         # Do a first pass to avoid circular dependencies
