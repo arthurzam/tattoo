@@ -3,11 +3,13 @@ dev-lang/python sqlite ssl xml
 dev-lang/python pgo
 dev-libs/tree-sitter-bash python
 dev-ml/* ocamlopt
->=sys-devel/gcc-12 ada
-sys-devel/gcc d fortran graphite openmp objc objc++ objc-gc
-sys-devel/gcc pgo
-sys-devel/gcc jit
+>=sys-devel/gcc-13 ada d fortran graphite openmp objc objc++ objc-gc
+>=sys-devel/gcc-13 pgo
+>=sys-devel/gcc-13 jit
 sys-devel/binutils pgo
+
+# for bootstrap
+sys-devel/gcc:11 d
 
 # for tests
 dev-python/pillow jpeg jpeg2k lcms tiff truetype webp
