@@ -86,27 +86,26 @@ tatt_test_pkg() {
 
     # --usepkg-exclude needs the package name, so let's extract it
     # from the atom we have
+    #
+    # A --with-test-deps quirk (bug #639588) means --usepkg-exclude should be passed to all invocations.
+    #
+    # If one happens to set EMERGE_DEFAULT_OPTS="--buildpkg", exclude it for the tested pkg (which is
+    # ACCEPT_KEYWORDS, and built several times).
     local name=$( pquery --raw --no-version "${1}" )
+    local commonopts=( --oneshot --usepkg-exclude="${name}" )
 
-    # We run some emerge commands twice here with --usepkg=n because of a
-    # --with-test-deps quirk (bug #639588).
     if [[ ${2} == "--test" ]]; then
         # Do a first pass to avoid circular dependencies
         # --onlydeps should mean we're avoiding (too much) duplicate work
-        USE="minimal -doc" tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps || \
-               USE="minimal -doc" tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps --usepkg=n
+        USE="minimal -doc" tattoo_emerge "${1}" --onlydeps --quiet "${commonopts[@]}" --with-test-deps
 
-        if ! tattoo_emerge "${1}" --onlydeps --with-bdeps=y --quiet --oneshot --with-test-deps && \
-		! tattoo_emerge "${1}" --onlydeps --quiet --oneshot --with-test-deps --usepkg=n; then
+        if ! tattoo_emerge "${1}" --onlydeps --quiet "${commonopts[@]}" --with-test-deps; then
             tatt_json_report_error "merging test dependencies failed"
             return 1
         fi
         printf "%s pkgdev_tatt_{{ job_name }}_test\n" "${1}"> "/etc/portage/package.env/pkgdev_tatt_{{ job_name }}/${CP}"
         echo "features: test" >> "{{ report_file }}"
     else
-        # Try to pre-emerge dependencies so that we can make use of getbinpkg
-        # here.
-        tattoo_emerge "${1}" --onlydeps --with-bdeps=y --quiet --oneshot --usepkg-exclude="${name}"
         printf "%s pkgdev_tatt_{{ job_name }}_no_test\n" "${1}" > "/etc/portage/package.env/pkgdev_tatt_{{ job_name }}/${CP}"
         echo "features: " >> "{{ report_file }}"
     fi
@@ -116,7 +115,7 @@ tatt_test_pkg() {
 
     printf "%s %s\n" "${1}" "${TUSE}" > "/etc/portage/package.use/pkgdev_tatt_{{ job_name }}/${CP}"
 
-    eout=$( tattoo_emerge "${1}" --oneshot --getbinpkg=n "${name}" )
+    eout=$( tattoo_emerge "${1}" "${commonopts[@]}" )
     local RES=$?
 
     rm -v -f /etc/portage/package.{env,use}/pkgdev_tatt_{{ job_name }}/${CP}
